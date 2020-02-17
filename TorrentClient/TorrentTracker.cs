@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -24,13 +25,13 @@ namespace TorrentClient
       _announce = announce;
     }
 
-    public async Task<List<Peer>> RetrievePeers(byte[] hashInfo, long size)
+    public async Task<List<Peer>> RetrievePeersAsync(byte[] hashInfo, byte[] peerId, long size)
     {
       var peers = new List<Peer>();
 
       var trackerResponse = await _announce
         .SetQueryParam("info_hash", HttpUtility.UrlEncode(hashInfo), true)
-        .SetQueryParam("peer_id", HttpUtility.UrlEncode(GetRandomPeerId()), true)
+        .SetQueryParam("peer_id", HttpUtility.UrlEncode(peerId), true)
         .SetQueryParam("port", 8861)
         .SetQueryParam("uploaded", "0")
         .SetQueryParam("downloaded", "0")
@@ -39,24 +40,21 @@ namespace TorrentClient
         .AllowHttpStatus("2xx")
         .GetAsync();
 
-      var content = await trackerResponse.Content.ReadAsStreamAsync();
+      var contentStream = await trackerResponse.Content.ReadAsStreamAsync();
 
-      var e = (_parser.Parse(content).ToKeyValuePairs().FirstOrDefault(r => r.Key == "peers").Value as BString).Value;
+      var peersArray = (
+        _parser.Parse(contentStream)
+          .ToKeyValuePairs().FirstOrDefault(r => r.Key == "peers")
+          .Value as BString
+        )?.Value ?? throw new InvalidOperationException("Could find peers array in tracker response");
 
-      for (int i = 0; i < e.Length; i += 6)
+
+      for (int i = 0; i < peersArray.Length; i += 6)
       {
-        peers.Add(new Peer(new IPAddress(e.Slice(i, 4).Span), BigEndian.ToUint16(e.Slice(i + 4, 2).Span)));
+        peers.Add(new Peer(new IPAddress(peersArray.Slice(i, 4).Span), BigEndian.ToUint16(peersArray.Slice(i + 4, 2).Span)));
       }
 
       return peers;
-    }
-
-    private byte[] GetRandomPeerId()
-    {
-      var peerId = new byte[20];
-      new Random().NextBytes(peerId);
-
-      return peerId;
     }
   }
 }

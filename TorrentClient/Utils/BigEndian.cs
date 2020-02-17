@@ -12,7 +12,7 @@ namespace TorrentClient.Utils
     }
     public static int ToUint32(ReadOnlySpan<byte> bytes)
     {
-      if (bytes.Length != 4) throw new ArgumentException("Byte array should have 2 elements");
+      if (bytes.Length != 4) throw new ArgumentException("Byte array should have 4 elements");
 
       return bytes[3] | bytes[2] << 8 | bytes[1] << 16 | bytes[0] << 24;
     }

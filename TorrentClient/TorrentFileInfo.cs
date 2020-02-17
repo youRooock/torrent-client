@@ -11,7 +11,7 @@ namespace TorrentClient
     public TorrentFileInfo(string path)
     {
       // ToDo: provide some validations for path
-      var parser = new BencodeParser();
+      BencodeParser parser = new BencodeParser();
       _torrent = parser.Parse<Torrent>(path);
     }
 

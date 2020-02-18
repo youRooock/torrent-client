@@ -10,7 +10,7 @@ namespace TorrentClient
   {
     static void Main(string[] args)
     {
-      var torrentFileInfo = new TorrentFileInfo("ubuntu-19.10-desktop-amd64.iso.torrent");
+      var torrentFileInfo = new TorrentFileInfo("/Users/yourock/Downloads/ubuntu-19.10-desktop-amd64.iso.torrent");
       var peerId = new byte[20];
 
       new Random().NextBytes(peerId);
@@ -29,8 +29,8 @@ namespace TorrentClient
           var tcpStream = tcp.GetStream();
 
 
-          var handshake = new Handshake(torrentFileInfo.InfoHash, peerId).Bytes;
-
+          // var handshake = new Handshake(torrentFileInfo.InfoHash, peerId).Bytes;
+          var handshake = Handshake.Create(torrentFileInfo.InfoHash, peerId).Bytes;
 
           tcpStream.Write(handshake, 0, handshake.Length);
 
@@ -38,7 +38,9 @@ namespace TorrentClient
 
           var bytes = tcpStream.Read(resp, 0, tcp.ReceiveBufferSize);
 
-          if (bytes == 68) count++;
+          var handshakeResponse = Handshake.Parse(resp);
+
+          var q = handshake.Equals(handshakeResponse);
         }
 
         catch (Exception e)

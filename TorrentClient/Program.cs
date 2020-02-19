@@ -19,20 +19,31 @@ namespace TorrentClient
 
       var peers = tracker.RetrievePeersAsync(torrentFileInfo.InfoHash, peerId, torrentFileInfo.Size).Result;
 
-      int count = 0;
+      var availablePeers = new List<Peer>();
+
       foreach (var peer in peers)
       {
         try
         {
           var tcp = new TcpClient();
-          tcp.Connect(peer.IPEndPoint);
+          var result = tcp.BeginConnect(peer.IPEndPoint.Address, peer.IPEndPoint.Port, null, null);
+
+
+          var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+
+          if (!success)
+          {
+            Console.WriteLine("Failed to connect.");
+          }
+
+          // we have connected
+          tcp.EndConnect(result);
+
+
           var tcpStream = tcp.GetStream();
+          var handshake = Handshake.Create(torrentFileInfo.InfoHash, peerId);
 
-
-          // var handshake = new Handshake(torrentFileInfo.InfoHash, peerId).Bytes;
-          var handshake = Handshake.Create(torrentFileInfo.InfoHash, peerId).Bytes;
-
-          tcpStream.Write(handshake, 0, handshake.Length);
+          tcpStream.Write(handshake.Bytes, 0, handshake.Bytes.Length);
 
           var resp = new byte[tcp.ReceiveBufferSize];
 
@@ -40,7 +51,7 @@ namespace TorrentClient
 
           var handshakeResponse = Handshake.Parse(resp);
 
-          var q = handshake.Equals(handshakeResponse);
+          if (handshake.Equals(handshakeResponse)) availablePeers.Add(peer);
         }
 
         catch (Exception e)
@@ -48,9 +59,6 @@ namespace TorrentClient
           continue;
         }
       }
-
-      Console.WriteLine(peers.Count);
-      Console.WriteLine(count);
     }
   }
 }

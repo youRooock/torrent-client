@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using TorrentClient.Utils;
@@ -39,27 +40,13 @@ namespace TorrentClient
 
       if (!handshake.Equals(handshakeResponse))
       {
-        Console.WriteLine("Couldnt establish hasdhakse with " + peer.IPEndPoint.ToString() );
+        Console.WriteLine("couldnt establish hasdhakse with " + peer.IPEndPoint.ToString() );
         return null;
       }
 
-
       Console.WriteLine("successful handshake with " + peer.IPEndPoint.ToString());
 
-      byte[] messageLength = new byte[4];
-      await tcpStream.ReadAsync(messageLength, 0, messageLength.Length);
-
-      var length = BigEndian.ToUint32(messageLength);
-      Span<byte> message = new byte[length];
-
-      await tcpStream.ReadAsync(message, 0, bitfield.Length);
-
-      Console.WriteLine(string.Join(" ", message));
-
-      tcpStream.Close();
-      tcpClient.Close();
-
-      return new TorrentClient(tcpStream, null);
+      return new TorrentClient(tcpStream);
     }
   }
 }

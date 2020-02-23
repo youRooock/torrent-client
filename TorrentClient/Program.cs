@@ -25,6 +25,13 @@ namespace TorrentClient
 
       var torrectFactory = new TorrentClientFactory(torrentFileInfo.InfoHash, peerId);
 
+      //Parallel.ForEach(peers, new ParallelOptions { MaxDegreeOfParallelism = 15 }, peer =>
+      // {
+      //   using var cl = torrectFactory.ConnectAsync(peer).Result;
+
+      //   var bf = cl == null ? default : cl.GetBitmapField().Result;
+      // });
+
       var tasks = peers.Select(peer =>
       {
         return Task.Run(async () =>

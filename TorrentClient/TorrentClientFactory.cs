@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using TorrentClient.Utils;
 
@@ -22,13 +23,14 @@ namespace TorrentClient
     {
       var tcpClient = new TcpClient();
       tcpClient.NoDelay = true;
-      tcpClient.ReceiveTimeout = 1000;
-      tcpClient.SendTimeout = 1000;
+      tcpClient.ReceiveTimeout = 5000;
+      tcpClient.SendTimeout = 5000;
 
       await tcpClient.ConnectAsync(peer.IPEndPoint.Address, peer.IPEndPoint.Port);
       var tcpStream = tcpClient.GetStream();
-      tcpStream.ReadTimeout = 1000;
-      tcpStream.WriteTimeout = 1000;
+
+      tcpStream.ReadTimeout = 5000;
+      tcpStream.WriteTimeout = 5000;
 
       var handshake = Handshake.Create(_infoHash, _peerId);
 
@@ -40,13 +42,13 @@ namespace TorrentClient
 
       if (!handshake.Equals(handshakeResponse))
       {
-        Console.WriteLine("couldnt establish hasdhakse with " + peer.IPEndPoint.ToString() );
+        Console.WriteLine("couldnt establish handshake with " + peer.IPEndPoint.ToString() );
         return null;
       }
 
       Console.WriteLine("successful handshake with " + peer.IPEndPoint.ToString());
 
-      return new TorrentClient(tcpStream);
+      return new TorrentClient(tcpClient);
     }
   }
 }

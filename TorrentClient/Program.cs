@@ -14,7 +14,7 @@ namespace TorrentClient
   {
     static async Task Main(string[] args)
     {
-      var torrentFileInfo = new TorrentFileInfo("/Users/yourock/Downloads/ubuntu-19.10-desktop-amd64.iso.torrent");
+      var torrentFileInfo = new TorrentFileInfo(@"D:\ubuntu.torrent");
       var peerId = new byte[20];
       new Random().NextBytes(peerId);
       var tracker = new TorrentTracker(torrentFileInfo.Announce);
@@ -25,32 +25,22 @@ namespace TorrentClient
 
       var torrectFactory = new TorrentClientFactory(torrentFileInfo.InfoHash, peerId);
 
-      //Parallel.ForEach(peers, new ParallelOptions { MaxDegreeOfParallelism = 15 }, peer =>
-      // {
-      //   using var cl = torrectFactory.ConnectAsync(peer).Result;
-
-      //   var bf = cl == null ? default : cl.GetBitmapField().Result;
-      // });
-
-      var tasks = peers.Select(peer =>
+      var tasks = peers.Select(async peer =>
       {
-        return Task.Run(async () =>
+        try
         {
           using var cl = await torrectFactory.ConnectAsync(peer);
 
           var bf = cl == null ? default : await cl.GetBitmapField();
-        });
+        }
+
+        catch (Exception e)
+        {
+          Console.WriteLine(e.ToString());
+        }
       });
 
-      try
-      {
-        await Task.WhenAll(tasks);
-      }
-
-      catch (Exception e)
-      {
-        Console.WriteLine(e.ToString());
-      }
+      await Task.WhenAll(tasks);
 
       sw.Stop();
 

@@ -15,12 +15,14 @@ namespace TorrentClient
     {
       _cl = cl;
       _ns = cl.GetStream();
+      _ns.ReadTimeout = 1000;
     }
 
     public async Task<byte[]> GetBitmapField()
     {
       byte[] messageLength = new byte[4];
-      await _ns.ReadAsync(messageLength, 0, messageLength.Length);
+
+      await ReadWholeArray(messageLength);
 
       var length = BigEndian.ToUint32(messageLength);
 
@@ -48,14 +50,14 @@ namespace TorrentClient
 
     public async Task SendUnchoke()
     {
-      var message = new Message { Id = MessageId.Unchoke }.Serialize();
+      var message = new Message {Id = MessageId.Unchoke}.Serialize();
 
       await _ns.WriteAsync(message, 0, message.Length);
     }
 
     public async Task SendInterested()
     {
-      var message = new Message { Id = MessageId.Interested }.Serialize();
+      var message = new Message {Id = MessageId.Interested}.Serialize();
 
       await _ns.WriteAsync(message, 0, message.Length);
     }

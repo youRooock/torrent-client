@@ -21,16 +21,24 @@ namespace TorrentClient
 
     public async Task<TorrentClient> ConnectAsync(Peer peer)
     {
-      var tcpClient = new TcpClient();
-      tcpClient.NoDelay = true;
-      tcpClient.ReceiveTimeout = 5000;
-      tcpClient.SendTimeout = 5000;
+      var tcpClient = new TcpClient {NoDelay = true, ReceiveTimeout = 3000, SendTimeout = 3000};
 
-      await tcpClient.ConnectAsync(peer.IPEndPoint.Address, peer.IPEndPoint.Port);
+      var result = tcpClient.BeginConnect(peer.IPEndPoint.Address, peer.IPEndPoint.Port, null, null);
+      var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+      
+      if (!success)
+      {
+        Console.WriteLine($"Couldn't connect {peer.IPEndPoint}");
+        return null;
+      }
+
+      tcpClient.EndConnect(result);
+      
+      // await tcpClient.ConnectAsync(peer.IPEndPoint.Address, peer.IPEndPoint.Port);
       var tcpStream = tcpClient.GetStream();
 
-      tcpStream.ReadTimeout = 5000;
-      tcpStream.WriteTimeout = 5000;
+      tcpStream.ReadTimeout = 3000;
+      tcpStream.WriteTimeout = 3000;
 
       var handshake = Handshake.Create(_infoHash, _peerId);
 
@@ -42,11 +50,11 @@ namespace TorrentClient
 
       if (!handshake.Equals(handshakeResponse))
       {
-        Console.WriteLine("couldnt establish handshake with " + peer.IPEndPoint.ToString() );
+        Console.WriteLine("couldn't establish handshake with " + peer.IPEndPoint);
         return null;
       }
 
-      Console.WriteLine("successful handshake with " + peer.IPEndPoint.ToString());
+      Console.WriteLine("successful handshake with " + peer.IPEndPoint);
 
       return new TorrentClient(tcpClient);
     }

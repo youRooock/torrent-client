@@ -19,7 +19,7 @@ namespace TorrentClient
     public Message(byte[] arr)
     {
       Id = (MessageId)arr[0];
-      Payload = arr.Skip(1).ToArray();
+      Payload = arr[1..^0];
     }
 
     public byte[] Serialize()

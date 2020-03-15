@@ -21,31 +21,14 @@ namespace TorrentClient
 
     public async Task<TorrentClient> ConnectAsync(Peer peer)
     {
-      var tcpClient = new TcpClient {NoDelay = true, ReceiveTimeout = 3000, SendTimeout = 3000};
-
-      var result = tcpClient.BeginConnect(peer.IPEndPoint.Address, peer.IPEndPoint.Port, null, null);
-      var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
-      
-      if (!success)
-      {
-        Console.WriteLine($"Couldn't connect {peer.IPEndPoint}");
-        return null;
-      }
-
-      tcpClient.EndConnect(result);
-      
-      // await tcpClient.ConnectAsync(peer.IPEndPoint.Address, peer.IPEndPoint.Port);
-      var tcpStream = tcpClient.GetStream();
-
-      tcpStream.ReadTimeout = 3000;
-      tcpStream.WriteTimeout = 3000;
-
+      var connection = new Connection(peer.IPEndPoint);
       var handshake = Handshake.Create(_infoHash, _peerId);
 
-      await tcpStream.WriteAsync(handshake.Bytes, 0, handshake.Bytes.Length);
+      connection.Write(handshake.Bytes);
 
       var resp = new byte[68];
-      await tcpStream.ReadAsync(resp, 0, resp.Length);
+
+      connection.Read(resp);
       var handshakeResponse = Handshake.Parse(resp);
 
       if (!handshake.Equals(handshakeResponse))
@@ -56,7 +39,7 @@ namespace TorrentClient
 
       Console.WriteLine("successful handshake with " + peer.IPEndPoint);
 
-      return new TorrentClient(tcpClient);
+      return new TorrentClient(connection);
     }
   }
 }

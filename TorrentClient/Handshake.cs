@@ -27,13 +27,14 @@ namespace TorrentClient
       return new Handshake(Encoding.UTF8.GetBytes("BitTorrent protocol"), infoHash, peerId);
     }
 
-    public static Handshake Parse(Span<byte> array)
+    public static Handshake Parse(byte[] array)
     {
       if (array.Length < MaxSize) return null;
       return new Handshake(
-        array.Slice(1, 19).ToArray(),
-        array.Slice(28, 20).ToArray(),
-        array.Slice(48, 20).ToArray());
+        array[1..20],
+        array[28..48],
+        array[48..68]
+      );
     }
 
     public byte[] Bytes => _handshakeBytes.ToArray();
@@ -54,20 +55,18 @@ namespace TorrentClient
       return false;
     }
 
-    private Span<byte> ExtractInfoHash()
+    private byte[] ExtractInfoHash()
     {
       return _handshakeBytes
         .ToArray()
-        .AsSpan()
-        .Slice(28, 20);
+        [28..48];
     }
 
-    private Span<byte> ExtractProtocolName()
+    private byte[] ExtractProtocolName()
     {
       return _handshakeBytes
         .ToArray()
-        .AsSpan()
-        .Slice(1, 19);
+        [1..20];
     }
   }
 }

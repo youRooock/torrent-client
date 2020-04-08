@@ -3,60 +3,62 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using TorrentClient.Utils;
 
 namespace TorrentClient
 {
-  public class Connection: IDisposable
+  public class Connection : IDisposable
   {
     private readonly TcpClient _tcpClient;
     private readonly NetworkStream _ns;
-    
+    private readonly BinaryWriter _writer;
+    private readonly BinaryReader _reader;
+    public BigEndianBinaryWriter BinaryWriter { get; }
+    public BigEndianBinaryReader BinarReader { get; }
+
 
     public Connection(IPEndPoint endPoint)
     {
-      _tcpClient = new TcpClient { NoDelay = true, ReceiveTimeout = 3000, SendTimeout = 3000};
+      _tcpClient = new TcpClient { SendTimeout = 3000, ReceiveTimeout = 3000};
 
-      var result = _tcpClient.BeginConnect(endPoint.Address, endPoint.Port, null, null);
-      var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(3));
-
-      if (!success)
-      {
-        Console.WriteLine($"Couldn't connect {endPoint}");
-        throw new Exception($"Couldn't connect {endPoint}");
-      }
-
-      _tcpClient.EndConnect(result);
+      _tcpClient.Connect(endPoint.Address, endPoint.Port);
 
       _ns = _tcpClient.GetStream();
-      _ns.ReadTimeout = 3000;
-      _ns.WriteTimeout = 3000;
+
+      _writer = new BinaryWriter(_ns);
+      _reader = new BinaryReader(_ns);
+      BinaryWriter = new BigEndianBinaryWriter(_ns);
+      BinarReader = new BigEndianBinaryReader(_ns);
     }
 
     public void Write(byte[] arr)
     {
-      _ns.Write(arr);
-      _ns.Flush();
+      _writer.Write(arr);
+      _writer.Flush();
     }
 
     public void Read(byte[] arr)
     {
       var offset = 0;
-      var read = int.MaxValue;
       var remaining = arr.Length;
-      while (remaining > 0 && read > 0)
+      do
       {
-        read = _ns.Read(arr, offset, remaining);
-        remaining -= read;
-        offset += read;
-      }
+        var readBytes = _reader.Read(arr, offset, remaining);
+        
+        if (readBytes == 0)
+        {
+          break;
+        }
+        
+        remaining -= readBytes;
+        offset += readBytes;
+      } while (remaining > 0);
     }
 
     public void Dispose()
     {
       _tcpClient.Close();
       _ns.Dispose();
-      //_writer.Dispose();
-      //_reader.Dispose();
     }
   }
 }

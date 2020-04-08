@@ -19,7 +19,7 @@ namespace TorrentClient
       _peerId = peerId;
     }
 
-    public async Task<TorrentClient> ConnectAsync(Peer peer)
+    public TorrentClient ConnectAsync(Peer peer)
     {
       var connection = new Connection(peer.IPEndPoint);
       var handshake = Handshake.Create(_infoHash, _peerId);
@@ -37,7 +37,7 @@ namespace TorrentClient
         return null;
       }
 
-      Console.WriteLine("successful handshake with " + peer.IPEndPoint);
+      Console.WriteLine($"{peer.IPEndPoint} successful handshake with");
 
       return new TorrentClient(connection);
     }

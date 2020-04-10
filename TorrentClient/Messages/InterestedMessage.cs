@@ -1,21 +1,26 @@
+using System;
 using System.IO;
+using System.Net;
 
 namespace TorrentClient.Messages
 {
   public class InterestedMessage
   {
-    public const byte ID = (int) MessageId.Have;
-    private readonly BinaryWriter _writer;
+    public const byte Id = (int) MessageId.Interested;
 
-    public InterestedMessage(BinaryWriter writer)
+    public byte[] Serialize()
     {
-      _writer = writer;
+      using var ms = new MemoryStream();
+      using var bw = new BinaryWriter(ms);
+
+      byte[] bytes = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(Length));
+      bw.Write(bytes);
+      bw.Write(Id);
+      bw.Flush();
+
+      return ms.ToArray();
     }
 
-    public void Send()
-    {
-      _writer.Write(ID);
-      _writer.Flush();
-    }
+    public int Length => 1;
   }
 }

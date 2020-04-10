@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using TorrentClient.Messages;
@@ -10,21 +12,18 @@ namespace TorrentClient
 {
   public class Peer
   {
-    // private readonly BigEndianBinaryWriter _writer;
-    // private readonly BigEndianBinaryReader _reader;
     public Channel<byte[]> Data = Channel.CreateUnbounded<byte[]>();
     public Connection Connection { get; private set; }
     public bool IsChoked { get; set; } = true;
 
     public int Downloaded { get; set; } = 0;
 
-    public Peer(IPAddress ip, int port)
+    public Peer(IPEndPoint ipEndPoint)
     {
-      IPEndPoint = new IPEndPoint(ip, port);
-      //var connection = new Connection(new IPEndPoint(ip, port));
-      // _writer = connection.BinaryWriter;
-      // _reader = connection.BinarReader;
+      IPEndPoint = ipEndPoint;
     }
+    
+    public static Peer Create(IPEndPoint ipEndPoint) => new Peer(ipEndPoint);
 
     public IPEndPoint IPEndPoint { get; }
     public bool IsConnected { get; private set; }
@@ -55,6 +54,12 @@ namespace TorrentClient
       BigEndian.PutUint32(payload.Slice(4, 4), request.Offset);
       BigEndian.PutUint32(payload.Slice(8, 4), request.Length);
 
+      var indx = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(request.Index));
+      var offset = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(request.Offset));
+      var len = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(request.Length));
+
+      var payload2 = indx.Concat(offset).Concat(len);
+      
       using var ms = new MemoryStream();
       var bw = new BinaryWriter(ms);
 
@@ -69,34 +74,18 @@ namespace TorrentClient
       Send(ms.ToArray(), false);
     }
 
-    public async Task SendUnchokeMessage()
+    public void SendUnchokeMessage()
     {
-      await using var ms = new MemoryStream();
-      var bw = new BinaryWriter(ms);
+      var bytes = new UnchokeMessage().Serialize();
 
-      var length = new byte[4];
-
-      BigEndian.PutUint32(length, 1);
-
-      bw.Write(length);
-      bw.Write((byte)MessageId.Unchoke);
-
-      Send(ms.ToArray(), false);
+      Send(bytes, false);
     }
 
-    public async Task SendInterestedMessage()
+    public void SendInterestedMessage()
     {
-      await using var ms = new MemoryStream();
-      var bw = new BinaryWriter(ms);
+     var bytes = new InterestedMessage().Serialize();
 
-      var length = new byte[4];
-
-      BigEndian.PutUint32(length, 1);
-
-      bw.Write(length);
-      bw.Write((byte)MessageId.Interested);
-
-      Send(ms.ToArray(), false);
+      Send(bytes, false);
     }
 
     public async Task SendHaveMessage(long index)
@@ -119,11 +108,39 @@ namespace TorrentClient
     public void Send(byte[] data, bool s)
     {
       Connection.Write(data);
+    } 
+    
+    public bool TrySend(byte[] data)
+    {
+      try
+      {
+        Connection.Write(data);
+        return true;
+      }
+      catch (Exception)
+      {
+        Console.WriteLine($"[{IPEndPoint}] failed to write");
+        return false;
+      }
     }
 
     public void ReadData(byte[] arr)
     {
       Connection.Read(arr);
+    }
+    
+    public bool TryReadData(byte[] arr)
+    {
+      try
+      {
+        Connection.Read(arr);
+        return true;
+      }
+      catch (Exception)
+      {
+        Console.WriteLine($"[{IPEndPoint}] failed to read");
+        return false;
+      }
     }
     
     public Message ReadMessage()

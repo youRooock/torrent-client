@@ -25,9 +25,9 @@ namespace TorrentClient
       _announce = announce;
     }
 
-    public async Task<List<Peer>> RetrievePeersAsync(byte[] hashInfo, byte[] peerId, long size)
+    public async Task<List<IPEndPoint>> RetrievePeersAsync(byte[] hashInfo, byte[] peerId, long size)
     {
-      var peers = new List<Peer>();
+      var peers = new List<IPEndPoint>();
 
       var trackerResponse = await _announce
         .SetQueryParam("info_hash", HttpUtility.UrlEncode(hashInfo), true)
@@ -51,7 +51,7 @@ namespace TorrentClient
 
       for (int i = 0; i < peersArray.Length; i += 6)
       {
-        peers.Add(new Peer(new IPAddress(peersArray.Slice(i, 4).Span), BigEndian.ToUint16(peersArray.Slice(i + 4, 2).Span)));
+        peers.Add(new IPEndPoint(new IPAddress(peersArray.Slice(i, 4).Span), BigEndian.ToUint16(peersArray.Slice(i + 4, 2).Span)));
       }
 
       return peers;

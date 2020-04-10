@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices.ComTypes;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Xml.Schema;
 using TorrentClient.Utils;
@@ -16,15 +17,18 @@ namespace TorrentClient
 {
   class Program
   {
+    static Channel<PieceResult> fileChannel = Channel.CreateUnbounded<PieceResult>();
     static async Task Main(string[] args)
     {
       var totalWatch = Stopwatch.StartNew();
       int maxConcurrency = 10;
       var torrentFileInfo = new TorrentFileInfo(@"D:\ubuntu.torrent");
+      var consumer = Task.Run(async () => await ConsumeAsync(torrentFileInfo));
+      
       var peerId = new byte[20];
       new Random().NextBytes(peerId);
       var tracker = new TorrentTracker(torrentFileInfo.Announce);
-      var peers = await tracker.RetrievePeersAsync(torrentFileInfo.InfoHash, peerId, torrentFileInfo.Size);
+      var endpoints = await tracker.RetrievePeersAsync(torrentFileInfo.InfoHash, peerId, torrentFileInfo.Size);
 
       var sw = Stopwatch.StartNew();
 
@@ -45,11 +49,13 @@ namespace TorrentClient
       SemaphoreSlim ss = new SemaphoreSlim(15);
 
       var tasks = new List<Task>();
-      foreach (var peer in peers)
+      foreach (var endpoint in endpoints)
       {
         await ss.WaitAsync();
         var t = Task.Run(async () =>
         {
+          var peer = Peer.Create(endpoint);
+
           var s = Stopwatch.StartNew();
           if (!peer.TryConnect())
           {
@@ -59,9 +65,9 @@ namespace TorrentClient
 
           // HANDSHAKE
           var handshake = Handshake.Create(torrentFileInfo.InfoHash, peerId);
-          peer.Send(handshake.Bytes, false);
+          if(!peer.TrySend(handshake.Bytes)) return;
           var hs = new byte[68];
-          peer.ReadData(hs);
+          if(!peer.TryReadData(hs)) return;
 
           var handshake2 = Handshake.Parse(hs);
 
@@ -81,9 +87,8 @@ namespace TorrentClient
           var bf = new Bitfield(msg.Payload);
 
           // peer.ReadData();
-
-          await peer.SendUnchokeMessage();
-          await peer.SendInterestedMessage();
+          peer.SendUnchokeMessage();
+          peer.SendInterestedMessage();
 
 
           // DOWNLOAD PIECE
@@ -153,7 +158,9 @@ namespace TorrentClient
 
               await peer.SendHaveMessage(item.Index);
 
-              results.Enqueue(new PieceResult {Index = piece.Index, Buffer = piece.Buffer});
+              await PublishAsync(new PieceResult {Index = piece.Index, Buffer = piece.Buffer});
+
+              // results.Enqueue(new PieceResult {Index = piece.Index, Buffer = piece.Buffer});
 
               s.Stop();
               Console.WriteLine($"[{peer.IPEndPoint}] Downloaded piece {item.Index} in {s.ElapsedMilliseconds}");
@@ -161,7 +168,7 @@ namespace TorrentClient
             catch (Exception e)
             {
               queue.Enqueue(item);
-              Console.WriteLine("Exception");
+              Console.WriteLine(e);
               break;
             }
           }
@@ -173,147 +180,60 @@ namespace TorrentClient
         tasks.Add(t);
       }
 
+      while (!fileChannel.Writer.TryComplete())
+      {
+      }
 
+      tasks.Add(consumer);
       await Task.WhenAll(tasks);
 
+      var writeSw = Stopwatch.StartNew();
 
-      try
-      {
-        using (var fs = new FileStream(@"D:\my-file.iso", FileMode.Create, FileAccess.Write))
-        {
-          while (results.Count != 0)
-          {
-            results.TryDequeue(out var piece);
-
-            var (begin, end) = CalculateBounds(piece.Index, torrentFileInfo);
-
-            fs.Seek(begin, SeekOrigin.Begin);
-            fs.Write(piece.Buffer, 0, (int) (end - begin));
-          }
-        }
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine("Exception caught in process: {0}", ex);
-      }
+      // try
+      // {
+      //   using (var fs = new FileStream(@"D:\my-file.iso", FileMode.Create, FileAccess.Write))
+      //   {
+      //     while (results.Count != 0)
+      //     {
+      //       results.TryDequeue(out var piece);
+      //
+      //       var (begin, end) = CalculateBounds(piece.Index, torrentFileInfo);
+      //
+      //       fs.Seek(begin, SeekOrigin.Begin);
+      //       fs.Write(piece.Buffer, 0, (int) (end - begin));
+      //     }
+      //   }
+      // }
+      // catch (Exception ex)
+      // {
+      //   Console.WriteLine("Exception caught in process: {0}", ex);
+      // }
       
+      writeSw.Stop();
       totalWatch.Stop();
       
+      Console.WriteLine($"Write time - {writeSw.Elapsed.Milliseconds} ms");
       Console.WriteLine($"Downloaded. Total time = {totalWatch.Elapsed.Minutes} mins and {totalWatch.Elapsed.Seconds} secs");
     }
 
+    static async Task ConsumeAsync(TorrentFileInfo torrentFileInfo)
+    {
+      await using var fs = new FileStream(@"D:\my-file.iso", FileMode.Create, FileAccess.Write);
+      while (await fileChannel.Reader.WaitToReadAsync())
+      {
+        if (fileChannel.Reader.TryRead(out var piece))
+        {
+          var (begin, end) = CalculateBounds(piece.Index, torrentFileInfo);
+          fs.Seek(begin, SeekOrigin.Begin);
+          fs.Write(piece.Buffer, 0, (int) (end - begin));
+        }
+      }
+    }
 
-    // foreach (var peer in peers)
-    // {
-    //   try
-    //   {
-    //     queue.TryDequeue(out var item);
-    //     peer.TryConnect();
-    //
-    //     var handshake = Handshake.Create(torrentFileInfo.InfoHash, peerId);
-    //
-    //     peer.Send(handshake.Bytes, false);
-    //     var hs = new byte[68];
-    //     peer.ReadData(hs);
-    //
-    //     peer.ReadData();
-    //
-    //     peer.SendUnchokeMessage();
-    //     peer.SendInterestedMessage();
-    //
-    //     long blockSize = 16384;
-    //     long requested = 0;
-    //
-    //     Console.WriteLine($"Downloading piece {item.Index}");
-    //     
-    //     for (; requested < item.Length;)
-    //     {
-    //       if (!peer.IsConnected) break;
-    //       
-    //       if (!peer.IsChoked)
-    //       {
-    //         if (item.Length - requested < blockSize)
-    //         {
-    //           blockSize = item.Length - requested;
-    //         }
-    //
-    //         peer.SendRequestMessage(
-    //           new BlockRequest(item.Index, requested, blockSize));
-    //         requested += blockSize;
-    //         // Console.WriteLine($"Downloaded {requested} of {item.Length}");
-    //       }
-    //     }
-    //     
-    //     Console.WriteLine($"Downloaded piece {item.Index}");
-
-
-    // var cl = torrectFactory.ConnectAsync(peer);
-    //
-    // if (cl == null)
-    // {
-    //   continue;
-    // }
-    //
-    // var bf = cl.GetBitmapField();
-    //
-    // Console.WriteLine($"{peer.IPEndPoint} got bitfield");
-    //
-    // cl.SendUnchoke();
-    // cl.SendInterested();
-    //
-    // if (!bf.HasPiece(item.Index))
-    // {
-    //   queue.Enqueue(item);
-    // }
-    //
-    // var buf = cl.TryDownload(item.Index, item.Length);
-    //
-    // if (buf == null) continue;
-    //
-    // SHA1 sha = new SHA1CryptoServiceProvider();
-    // var computedHash = sha.ComputeHash(buf);
-    // var eq = item.Hash.SequenceEqual(computedHash);
-    //
-    // if (!eq)
-    // {
-    //   Console.WriteLine("Failed checksum");
-    //   continue;
-    // }
-    //
-    //
-    // cl.SendHave(item.Index);
-    // Console.WriteLine("done");
-    // results.Enqueue(new PieceResult {Index = item.Index, Buffer = buf});
-    // }
-    //   // catch (Exception)
-    //   // {
-    //   //   Console.WriteLine($"Disconnected {peer.IPEndPoint}");
-    //   // }
-    // }
-
-
-    // await Task.WhenAll(tasks);
-
-    // var buffer = new byte[torrentFileInfo.Size];
-    // var donePieces = 0;
-    //
-    //
-    // while (donePieces < torrentFileInfo.PieceHashes.Length)
-    // {
-    //   var r = results.Dequeue();
-    //
-    //   var begin = r.Index * torrentFileInfo.PieceSize;
-    //   var end = begin + torrentFileInfo.PieceSize;
-    //
-    //   if (end > torrentFileInfo.Size) end = torrentFileInfo.Size;
-    //   
-    //   Array.Copy(r.Buffer, 0,buffer, begin, end);
-    // }
-    //
-    // sw.Stop();
-    //
-    // Console.WriteLine(sw.ElapsedMilliseconds);
-
+    static async Task PublishAsync(PieceResult piece)
+    {
+      await fileChannel.Writer.WriteAsync(piece);
+    }
 
     static (long, long) CalculateBounds(int index, TorrentFileInfo info)
     {

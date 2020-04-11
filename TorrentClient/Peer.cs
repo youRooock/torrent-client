@@ -49,63 +49,31 @@ namespace TorrentClient
 
     public void SendRequestMessage(BlockRequest request)
     {
-      var payload = new byte[12].AsSpan();
-      BigEndian.PutUint32(payload.Slice(0, 4), request.Index);
-      BigEndian.PutUint32(payload.Slice(4, 4), request.Offset);
-      BigEndian.PutUint32(payload.Slice(8, 4), request.Length);
-
-      var indx = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(request.Index));
-      var offset = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(request.Offset));
-      var len = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(request.Length));
-
-      var payload2 = indx.Concat(offset).Concat(len);
-      
-      using var ms = new MemoryStream();
-      var bw = new BinaryWriter(ms);
-
-      var length = new byte[4];
-
-      BigEndian.PutUint32(length, payload.Length + 1);
-
-      bw.Write(length);
-      bw.Write((byte)MessageId.Request);
-      bw.Write(payload);
-
-      Send(ms.ToArray(), false);
+      var message = new RequestMessage(request);
+     Send(message.Serialize());
     }
 
     public void SendUnchokeMessage()
     {
       var bytes = new UnchokeMessage().Serialize();
 
-      Send(bytes, false);
+      Send(bytes);
     }
 
     public void SendInterestedMessage()
     {
      var bytes = new InterestedMessage().Serialize();
 
-      Send(bytes, false);
+      Send(bytes);
     }
 
-    public async Task SendHaveMessage(long index)
+    public void SendHaveMessage(long index)
     {
-      using var ms = new MemoryStream();
-      BinaryWriter w = new BigEndianBinaryWriter(ms);
-      var message = new HaveMessage(w);
-      message.Send(index);
-      await Send(ms.ToArray());
+      var message = new HaveMessage(index);
+      Send(message.Serialize());
     }
-
-    public async Task Send(byte[] data)
-    {
-      Connection.BinaryWriter.Write(data.Length);
-      Connection.BinaryWriter.Write(data);
-      Connection.BinaryWriter.Flush();
-      await Data.Writer.WriteAsync(data);
-    }
-
-    public void Send(byte[] data, bool s)
+    
+    public void Send(byte[] data)
     {
       Connection.Write(data);
     } 
@@ -123,12 +91,6 @@ namespace TorrentClient
         return false;
       }
     }
-
-    public void ReadData(byte[] arr)
-    {
-      Connection.Read(arr);
-    }
-    
     public bool TryReadData(byte[] arr)
     {
       try
@@ -145,11 +107,13 @@ namespace TorrentClient
     
     public Message ReadMessage()
     {
-      int length = Connection.BinarReader.ReadInt32();
+      // int length = Connection.BinarReader.ReadInt32();
 
+      int value = Connection.Read();
+      var length = IPAddress.NetworkToHostOrder(value);
       if (length == 0) return null;
 
-      byte[] data = Connection.BinarReader.ReadBytes(length);
+      byte[] data = Connection.Read(length);
 
       var msg = new Message(data);
 
@@ -157,44 +121,44 @@ namespace TorrentClient
     }
 
 
-    public void ReadData()
-    {
-      Task.Factory.StartNew(() =>
-      {
-        try
-        {
-          while (true)
-          {
-            // Read message length
-            int length = Connection.BinarReader.ReadInt32();
-
-            if (length == 0)
-            {
-              Console.WriteLine($"[{IPEndPoint}] keep alive");
-              continue;
-            }
-
-            // Read data
-            byte[] data = Connection.BinarReader.ReadBytes(length);
-
-            var m = new Message(data);
-
-            switch (m.Id)
-            {
-              case MessageId.Piece:
-                break;
-              case MessageId.Unchoke:
-                IsChoked = false;
-                break;
-            }
-          }
-        }
-        catch (IOException)
-        {
-          IsConnected = false;
-          Console.WriteLine($"[{IPEndPoint}] Disconnected");
-        }
-      }, TaskCreationOptions.LongRunning);
-    }
+    // public void ReadData()
+    // {
+    //   Task.Factory.StartNew(() =>
+    //   {
+    //     try
+    //     {
+    //       while (true)
+    //       {
+    //         // Read message length
+    //         int length = Connection.BinarReader.ReadInt32();
+    //
+    //         if (length == 0)
+    //         {
+    //           Console.WriteLine($"[{IPEndPoint}] keep alive");
+    //           continue;
+    //         }
+    //
+    //         // Read data
+    //         byte[] data = Connection.BinarReader.ReadBytes(length);
+    //
+    //         var m = new Message(data);
+    //
+    //         switch (m.Id)
+    //         {
+    //           case MessageId.Piece:
+    //             break;
+    //           case MessageId.Unchoke:
+    //             IsChoked = false;
+    //             break;
+    //         }
+    //       }
+    //     }
+    //     catch (IOException)
+    //     {
+    //       IsConnected = false;
+    //       Console.WriteLine($"[{IPEndPoint}] Disconnected");
+    //     }
+    //   }, TaskCreationOptions.LongRunning);
+    // }
   }
 }

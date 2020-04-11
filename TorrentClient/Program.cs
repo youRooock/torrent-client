@@ -46,7 +46,7 @@ namespace TorrentClient
         queue.Enqueue(item);
       }
 
-      SemaphoreSlim ss = new SemaphoreSlim(15);
+      SemaphoreSlim ss = new SemaphoreSlim(10);
 
       var tasks = new List<Task>();
       foreach (var endpoint in endpoints)
@@ -102,7 +102,7 @@ namespace TorrentClient
               {
                 Console.WriteLine($"[{peer.IPEndPoint}] doesnt have piece with index {item.Index}");
                 queue.Enqueue(item);
-                continue;
+                break;
               }
 
               var piece = new PieceProgress
@@ -156,7 +156,7 @@ namespace TorrentClient
                 throw new Exception("failed check sum");
               }
 
-              await peer.SendHaveMessage(item.Index);
+              peer.SendHaveMessage(item.Index);
 
               await PublishAsync(new PieceResult {Index = piece.Index, Buffer = piece.Buffer});
 
@@ -168,7 +168,7 @@ namespace TorrentClient
             catch (Exception e)
             {
               queue.Enqueue(item);
-              Console.WriteLine(e);
+              Console.WriteLine($"[{peer.IPEndPoint}] Disconnected");
               break;
             }
           }

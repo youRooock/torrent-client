@@ -1,25 +1,35 @@
+using System;
 using System.IO;
+using System.Net;
 using TorrentClient.Utils;
 
 namespace TorrentClient.Messages
 {
   public class HaveMessage
   {
-    public const byte ID = (int) MessageId.Have;
-    private readonly BinaryWriter _writer;
+    private readonly long _index;
+    public const byte Id = (int) MessageId.Have;
 
-    public HaveMessage(BinaryWriter writer)
+    public HaveMessage(long index)
     {
-      _writer = writer;
+      _index = index;
     }
 
-    public void Send(long index)
+    public byte[] Serialize()
     {
-      var payload = new byte[4];
-      BigEndian.PutUint32(payload, index);
-      _writer.Write(ID);
-      _writer.Write(payload);
-      _writer.Flush();
+      using var ms = new MemoryStream();
+      using var bw = new BinaryWriter(ms);
+
+      byte[] bytes = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((int)_index));
+      byte[] lengthBytes = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(bytes.Length + 1));
+      bw.Write(lengthBytes);
+      bw.Write(Id);
+      bw.Write(bytes);
+      bw.Flush();
+
+      return ms.ToArray();
     }
+
+    public int Length => 1;
   }
 }

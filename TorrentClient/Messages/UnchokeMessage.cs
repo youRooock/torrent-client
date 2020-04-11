@@ -6,7 +6,7 @@ namespace TorrentClient.Messages
 {
   public class UnchokeMessage
   {
-    public const byte Id = (int) MessageId.Unchoke;
+    public const byte Id = (byte) MessageId.Unchoke;
 
     public byte[] Serialize()
     {

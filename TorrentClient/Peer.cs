@@ -49,6 +49,10 @@ namespace TorrentClient
       {
         return false;
       }
+      catch (IOException)
+      {
+        return false;
+      }
     }
 
 

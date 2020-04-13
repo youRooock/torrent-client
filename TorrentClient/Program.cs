@@ -53,6 +53,8 @@ namespace TorrentClient
       foreach (var endpoint in endpoints)
       {
         await ss.WaitAsync();
+        if (Downloaded == torrentFileInfo.Size) return;
+
         var t = Task.Run(async () =>
         {
           var peer = Peer.Create(endpoint);
@@ -128,7 +130,7 @@ namespace TorrentClient
               s.Stop();
               Console.WriteLine($"[{peer.IPEndPoint}] Downloaded piece {item.Index} in {s.ElapsedMilliseconds}");
             }
-            catch (Exception e)
+            catch (Exception)
             {
               queue.Enqueue(item);
               Console.WriteLine($"[{peer.IPEndPoint}] Disconnected");
@@ -142,9 +144,7 @@ namespace TorrentClient
         tasks.Add(t);
       }
 
-      while (!fileChannel.Writer.TryComplete())
-      {
-      }
+      fileChannel.Writer.Complete();
 
       tasks.Add(consumer);
       await Task.WhenAll(tasks);
@@ -153,6 +153,8 @@ namespace TorrentClient
       Console.WriteLine(
         $"Downloaded. Total time = {totalWatch.Elapsed.Minutes} mins and {totalWatch.Elapsed.Seconds} secs");
     }
+
+    private static long Downloaded = 0;
 
     static async Task ConsumeAsync(TorrentFileInfo torrentFileInfo)
     {
@@ -164,6 +166,8 @@ namespace TorrentClient
           var (begin, end) = CalculateBounds(piece.Index, torrentFileInfo);
           fs.Seek(begin, SeekOrigin.Begin);
           fs.Write(piece.Buffer, 0, (int) (end - begin));
+
+          Interlocked.Add(ref Downloaded, piece.Buffer.Length);
         }
       }
     }

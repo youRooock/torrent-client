@@ -41,7 +41,7 @@ namespace TorrentClient
 
     public byte[] TryDownload(int index, long length)
     {
-      var state = new PieceProgress
+      var state = new Piece
       {
         Index = index,
         Buffer = new byte[length]

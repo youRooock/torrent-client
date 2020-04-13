@@ -18,13 +18,14 @@ namespace TorrentClient
   class Program
   {
     static Channel<PieceResult> fileChannel = Channel.CreateUnbounded<PieceResult>();
+
     static async Task Main(string[] args)
     {
       var totalWatch = Stopwatch.StartNew();
       int maxConcurrency = 10;
       var torrentFileInfo = new TorrentFileInfo(@"D:\ubuntu.torrent");
       var consumer = Task.Run(async () => await ConsumeAsync(torrentFileInfo));
-      
+
       var peerId = new byte[20];
       new Random().NextBytes(peerId);
       var tracker = new TorrentTracker(torrentFileInfo.Announce);
@@ -57,65 +58,28 @@ namespace TorrentClient
           var peer = Peer.Create(endpoint);
 
           var s = Stopwatch.StartNew();
-          if (!peer.TryConnect())
+          if (!peer.TryConnect(torrentFileInfo.InfoHash, peerId))
           {
             Console.WriteLine($"[{peer.IPEndPoint}] failed to connect");
             return;
           }
 
-          // HANDSHAKE
-          // var handshake = Handshake.Create(torrentFileInfo.InfoHash, peerId);
-          // if(!peer.TrySend(handshake.Bytes)) return;
-          // var hs = new byte[68];
-          // if(!peer.TryReadData(hs)) return;
-          //
-          // var handshake2 = Handshake.Parse(hs);
-          //
-          // if (!handshake.Equals(handshake2))
-          // {
-          //   Console.WriteLine($"[{peer.IPEndPoint}] Handshake failed");
-          //   return;
-          // }
-          // else
-          // {
-          //   Console.WriteLine($"[{peer.IPEndPoint}] successful handshake]");
-          // }
-
-          if (peer.TryHandshake(torrentFileInfo.InfoHash, peerId))
-          {
-            Console.WriteLine($"[{peer.IPEndPoint}] successful handshake");
-          }
-          else
-          {
-            Console.WriteLine($"[{peer.IPEndPoint}] Handshake failed");
-            return;
-          }
-
-          // BITFIELD
-          var msg = peer.ReadMessage();
-
-          var bf = new Bitfield(msg.Payload);
-
-          // peer.ReadData();
           peer.SendUnchokeMessage();
           peer.SendInterestedMessage();
-
-
-          // DOWNLOAD PIECE
 
           while (queue.Count != 0)
           {
             if (!queue.TryDequeue(out var item)) continue;
             try
             {
-              if (!bf.HasPiece(item.Index))
+              if (!peer.Bitfield.HasPiece(item.Index))
               {
                 Console.WriteLine($"[{peer.IPEndPoint}] doesnt have piece with index {item.Index}");
                 queue.Enqueue(item);
                 break;
               }
 
-              var piece = new PieceProgress
+              var piece = new Piece
               {
                 Index = item.Index,
                 Buffer = new byte[item.Length]
@@ -156,15 +120,7 @@ namespace TorrentClient
                 }
               }
 
-              SHA1 sha = new SHA1CryptoServiceProvider();
-              var computedHash = sha.ComputeHash(piece.Buffer);
-              var eq = item.Hash.SequenceEqual(computedHash);
-
-              if (!eq)
-              {
-                throw new Exception("failed check sum");
-              }
-
+              piece.CheckIntegrity(item.Hash);
               peer.SendHaveMessage(item.Index);
 
               await PublishAsync(new PieceResult {Index = piece.Index, Buffer = piece.Buffer});
@@ -194,7 +150,8 @@ namespace TorrentClient
       await Task.WhenAll(tasks);
       totalWatch.Stop();
 
-      Console.WriteLine($"Downloaded. Total time = {totalWatch.Elapsed.Minutes} mins and {totalWatch.Elapsed.Seconds} secs");
+      Console.WriteLine(
+        $"Downloaded. Total time = {totalWatch.Elapsed.Minutes} mins and {totalWatch.Elapsed.Seconds} secs");
     }
 
     static async Task ConsumeAsync(TorrentFileInfo torrentFileInfo)

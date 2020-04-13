@@ -14,6 +14,7 @@ namespace TorrentClient
   public class Peer
   {
     public Connection Connection { get; private set; }
+    public Bitfield Bitfield { get; private set; }
     public bool IsChoked { get; set; } = true;
 
     public int Downloaded { get; set; } = 0;
@@ -28,13 +29,16 @@ namespace TorrentClient
     public IPEndPoint IPEndPoint { get; }
     public bool IsConnected { get; private set; }
 
-    public bool TryConnect()
+    public bool TryConnect(byte[] infoHash, byte[] peerId)
     {
       try
       {
         if (!IsConnected)
         {
           Connection = new Connection(IPEndPoint);
+          HandshakePeer(infoHash, peerId);
+          Bitfield = RetrieveBitfield();
+
           IsConnected = true;
         }
 
@@ -47,22 +51,29 @@ namespace TorrentClient
       }
     }
 
-    public bool TryHandshake(byte[] infoHash, byte[] peerId)
+
+    public Bitfield RetrieveBitfield()
+    {
+      var mgs = ReadMessage();
+      
+      return new Bitfield(mgs.Payload);
+    }
+
+    public void HandshakePeer(byte[] infoHash, byte[] peerId)
     {
       var handshake = Handshake.Create(infoHash, peerId);
-      if(!TrySend(handshake.Bytes)) return false;
-      var hs = new byte[68];
-      if(!TryReadData(hs)) return false;
 
+      Send(handshake.Bytes);
+
+      var hs = ReadData(68);
       var handshake2 = Handshake.Parse(hs);
 
       if (!handshake.Equals(handshake2))
       {
         Console.WriteLine($"[{IPEndPoint}] Handshake failed");
-        return false;
-      }
 
-      return true;
+        throw new Exception($"[{IPEndPoint}] Handshake failed");
+      }
     }
 
     public void SendRequestMessage(BlockRequest request)
@@ -110,24 +121,13 @@ namespace TorrentClient
       }
     }
 
-    public bool TryReadData(byte[] arr)
+    public byte[] ReadData(int length)
     {
-      try
-      {
-        Connection.Read(arr);
-        return true;
-      }
-      catch (Exception)
-      {
-        Console.WriteLine($"[{IPEndPoint}] failed to read");
-        return false;
-      }
-    }
+      return Connection.Read(length);
+     }
 
     public Message ReadMessage()
     {
-      // int length = Connection.BinarReader.ReadInt32();
-
       int value = Connection.Read();
       var length = IPAddress.NetworkToHostOrder(value);
       if (length == 0) return null;

@@ -10,12 +10,15 @@ namespace TorrentClient
     private const int MaxSize = 68;
     private readonly byte[] _emptyArr = new byte[8];
     private readonly List<byte> _handshakeBytes;
+    private readonly byte[] _infoHash;
+    private readonly byte[] _protocolName;
 
     private Handshake(byte[] protocolName, byte[] infoHash, byte[] peerId)
     {
+      _protocolName = protocolName ?? throw new ArgumentException(nameof(protocolName));
+      _infoHash = infoHash ?? throw new ArgumentException(nameof(infoHash));
       _handshakeBytes = new List<byte>(infoHash.Length + peerId.Length + protocolName.Length + _emptyArr.Length + 1);
-
-      _handshakeBytes.Add((byte)protocolName.Length);
+      _handshakeBytes.Add((byte) protocolName.Length);
       _handshakeBytes.AddRange(protocolName);
       _handshakeBytes.AddRange(_emptyArr);
       _handshakeBytes.AddRange(infoHash);
@@ -29,7 +32,7 @@ namespace TorrentClient
 
     public static Handshake Parse(byte[] array)
     {
-      if (array.Length < MaxSize) return null;
+      if (array == null || array.Length < MaxSize) return null;
       return new Handshake(
         array[1..20],
         array[28..48],
@@ -48,25 +51,11 @@ namespace TorrentClient
     {
       if (o is Handshake handshake)
       {
-        return handshake.ExtractInfoHash().SequenceEqual(ExtractInfoHash())
-          && handshake.ExtractProtocolName().SequenceEqual(ExtractProtocolName());
+        return handshake._infoHash.SequenceEqual(_infoHash)
+               && handshake._protocolName.SequenceEqual(_protocolName);
       }
 
       return false;
-    }
-
-    private byte[] ExtractInfoHash()
-    {
-      return _handshakeBytes
-        .ToArray()
-        [28..48];
-    }
-
-    private byte[] ExtractProtocolName()
-    {
-      return _handshakeBytes
-        .ToArray()
-        [1..20];
     }
   }
 }

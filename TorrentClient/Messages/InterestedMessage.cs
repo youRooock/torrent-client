@@ -4,7 +4,7 @@ using System.Net;
 
 namespace TorrentClient.Messages
 {
-  public class InterestedMessage
+  public class InterestedMessage: IMessage
   {
     public const byte Id = (byte) MessageId.Interested;
 

@@ -4,7 +4,7 @@ using System.Net;
 
 namespace TorrentClient.Messages
 {
-  public class UnchokeMessage
+  public class UnchokeMessage: IMessage
   {
     public const byte Id = (byte) MessageId.Unchoke;
 

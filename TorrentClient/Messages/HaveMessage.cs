@@ -1,11 +1,10 @@
 using System;
 using System.IO;
 using System.Net;
-using TorrentClient.Utils;
 
 namespace TorrentClient.Messages
 {
-  public class HaveMessage
+  public class HaveMessage: IMessage
   {
     private readonly long _index;
     public const byte Id = (int) MessageId.Have;

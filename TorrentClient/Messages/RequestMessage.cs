@@ -4,7 +4,7 @@ using System.Net;
 
 namespace TorrentClient.Messages
 {
-  public class RequestMessage
+  public class RequestMessage: IMessage
   {
     private readonly BlockRequest _block;
     private const byte Id = (byte) MessageId.Request;

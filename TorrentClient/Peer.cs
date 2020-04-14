@@ -1,77 +1,59 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Net;
-using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 using TorrentClient.Messages;
-using TorrentClient;
 
 namespace TorrentClient
 {
-  public class Peer
+  public class Peer : IDisposable
   {
-    public Connection Connection { get; private set; }
+    private Connection Connection { get; set; }
+    private bool IsConnected { get; set; }
     public Bitfield Bitfield { get; private set; }
+
+    // ReSharper disable once InconsistentNaming
+    public IPEndPoint IPEndPoint { get; }
     public bool IsChoked { get; set; } = true;
 
-    public int Downloaded { get; set; } = 0;
-
-    public Peer(IPEndPoint ipEndPoint)
+    private Peer(IPEndPoint ipEndPoint)
     {
       IPEndPoint = ipEndPoint;
     }
 
     public static Peer Create(IPEndPoint ipEndPoint) => new Peer(ipEndPoint);
 
-    public IPEndPoint IPEndPoint { get; }
-    public bool IsConnected { get; private set; }
-
-    public bool TryConnect(byte[] infoHash, byte[] peerId)
+    public bool TryConnect(byte[] infoHash)
     {
       try
       {
         if (!IsConnected)
         {
           Connection = new Connection(IPEndPoint);
-          HandshakePeer(infoHash, peerId);
-          Bitfield = RetrieveBitfield();
-
           IsConnected = true;
+          HandshakePeer(Handshake.Create(infoHash, PeerId.CreateNew()));
+          Bitfield = RetrieveBitfield();
         }
 
         return true;
       }
 
-      catch (SocketException)
-      {
-        return false;
-      }
-      catch (IOException)
-      {
-        return false;
-      }
       catch (Exception)
       {
+        IsConnected = false;
         return false;
       }
     }
 
-
-    public Bitfield RetrieveBitfield()
+    private Bitfield RetrieveBitfield()
     {
       var mgs = ReadMessage();
-      
+
       return new Bitfield(mgs.Payload);
     }
 
-    public void HandshakePeer(byte[] infoHash, byte[] peerId)
+    private void HandshakePeer(Handshake handshake)
     {
-      var handshake = Handshake.Create(infoHash, peerId);
-
-      Send(handshake.Bytes);
+      SendInternal(handshake.Bytes);
 
       var hs = ReadData(68);
       var handshake2 = Handshake.Parse(hs);
@@ -84,59 +66,24 @@ namespace TorrentClient
       }
     }
 
-    public void SendRequestMessage(BlockRequest request)
-    {
-      var message = new RequestMessage(request);
-      Send(message.Serialize());
-    }
+    public void SendMessage(IMessage message) => SendInternal(message.Serialize());
 
-    public void SendUnchokeMessage()
-    {
-      var bytes = new UnchokeMessage().Serialize();
 
-      Send(bytes);
-    }
-
-    public void SendInterestedMessage()
-    {
-      var bytes = new InterestedMessage().Serialize();
-
-      Send(bytes);
-    }
-
-    public void SendHaveMessage(long index)
-    {
-      var message = new HaveMessage(index);
-      Send(message.Serialize());
-    }
-
-    public void Send(byte[] data)
-    {
-      Connection.Write(data);
-    }
-
-    public bool TrySend(byte[] data)
-    {
-      try
-      {
-        Connection.Write(data);
-        return true;
-      }
-      catch (Exception e)
-      {
-        Console.WriteLine($"[{IPEndPoint}] failed to write");
-        return false;
-      }
-    }
+    // public IMessage ReadMessage()
+    // {
+    //   var bytes = ReadInternal();
+    //   
+    //   
+    // }
 
     public byte[] ReadData(int length)
     {
       return Connection.Read(length);
-     }
+    }
 
     public Message ReadMessage()
     {
-      int value = Connection.Read();
+      int value = Connection.ReadSize();
       var length = IPAddress.NetworkToHostOrder(value);
       if (length == 0) return null;
 
@@ -147,56 +94,45 @@ namespace TorrentClient
       return msg;
     }
 
-
-    public event Action<PieceEvent> OnPieceReceived;
-    
-    public void ReadData()
+    public void Dispose()
     {
-      Task.Factory.StartNew(() =>
-      {
-        try
-        {
-          while (true)
-          {
-            // Read message length
-            int length = Connection.Read();
-
-            if (length == 0)
-            {
-              Console.WriteLine($"[{IPEndPoint}] keep alive");
-              continue;
-            }
-
-            // Read data
-            byte[] data = Connection.Read(length);
-
-            var m = new Message(data);
-
-            if (m.Id == MessageId.Unchoke)
-            {
-              IsChoked = false;
-            }
-
-            if (m.Id == MessageId.Piece)
-            {
-              OnPieceReceived?.Invoke(new PieceEvent());
-            }
-          }
-        }
-        catch (IOException)
-        {
-          IsConnected = false;
-          Console.WriteLine($"[{IPEndPoint}] Disconnected");
-        }
-      }, TaskCreationOptions.LongRunning);
+      Connection?.Dispose();
     }
-  }
 
-  public class PieceEvent: EventArgs
-  {
-    public PieceEvent()
+    private byte[] ReadInternal()
     {
-      
+      try
+      {
+        int byteSize = Connection.ReadSize();
+        if (byteSize == 0) return null;
+
+        return Connection.Read(byteSize);
+      }
+
+      catch (IOException)
+      {
+        IsConnected = false;
+        return null;
+      }
+    }
+
+    private void SendInternal(byte[] data)
+    {
+      try
+      {
+        if (IsConnected)
+        {
+          Connection.Write(data);
+        }
+        else
+        {
+          throw new Exception();
+        }
+      }
+      catch (IOException)
+      {
+        IsConnected = false;
+      }
     }
   }
 }

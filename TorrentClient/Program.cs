@@ -4,13 +4,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Sockets;
-using System.Runtime.InteropServices.ComTypes;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using System.Xml.Schema;
+using TorrentClient.Messages;
 using TorrentClient.Utils;
 
 namespace TorrentClient
@@ -22,20 +19,11 @@ namespace TorrentClient
     static async Task Main(string[] args)
     {
       var totalWatch = Stopwatch.StartNew();
-      int maxConcurrency = 10;
       var torrentFileInfo = new TorrentFileInfo(@"D:\ubuntu.torrent");
       var consumer = Task.Run(async () => await ConsumeAsync(torrentFileInfo));
 
-      var peerId = new byte[20];
-      new Random().NextBytes(peerId);
       var tracker = new TorrentTracker(torrentFileInfo.Announce);
-      var endpoints = await tracker.RetrievePeersAsync(torrentFileInfo.InfoHash, peerId, torrentFileInfo.Size);
-
-      var sw = Stopwatch.StartNew();
-
-      var torrectFactory = new TorrentClientFactory(torrentFileInfo.InfoHash, peerId);
-
-      var results = new ConcurrentQueue<PieceResult>();
+      var endpoints = await tracker.RetrievePeersAsync(torrentFileInfo.InfoHash, PeerId.CreateNew(), torrentFileInfo.Size);
 
       var queue = new ConcurrentQueue<WorkItem>();
 
@@ -57,17 +45,17 @@ namespace TorrentClient
 
         var t = Task.Run(async () =>
         {
-          var peer = Peer.Create(endpoint);
+          using var peer = Peer.Create(endpoint);
 
           var s = Stopwatch.StartNew();
-          if (!peer.TryConnect(torrentFileInfo.InfoHash, peerId))
+          if (!peer.TryConnect(torrentFileInfo.InfoHash))
           {
             Console.WriteLine($"[{peer.IPEndPoint}] failed to connect");
             return;
           }
 
-          peer.SendUnchokeMessage();
-          peer.SendInterestedMessage();
+          peer.SendMessage(new UnchokeMessage());
+          peer.SendMessage(new InterestedMessage());
 
           while (queue.Count != 0)
           {
@@ -102,8 +90,7 @@ namespace TorrentClient
                       blockSize = item.Length - piece.Requested;
                     }
 
-                    peer.SendRequestMessage(
-                      new BlockRequest(item.Index, piece.Requested, blockSize));
+                    peer.SendMessage(new RequestMessage(new BlockRequest(item.Index, piece.Requested, blockSize)));
                     piece.Requested += blockSize;
                   }
                 }
@@ -123,7 +110,7 @@ namespace TorrentClient
               }
 
               piece.CheckIntegrity(item.Hash);
-              peer.SendHaveMessage(item.Index);
+              peer.SendMessage(new HaveMessage(item.Index));
 
               await PublishAsync(new PieceResult {Index = piece.Index, Buffer = piece.Buffer});
 

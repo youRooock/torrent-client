@@ -11,26 +11,10 @@ namespace TorrentClient
     public byte[] Payload { get; set; }
     public MessageId Id { get; set; }
 
-    public Message()
-    {
-
-    }
-
     public Message(byte[] arr)
     {
       Id = (MessageId)arr[0];
       Payload = arr[1..];
-    }
-
-    public byte[] Serialize()
-    {
-      var buffer = new byte[MessageSizeLength + TotalMessageSize];
-      BigEndian.PutUint32(buffer, TotalMessageSize);
-      buffer[4] = (byte)Id;
-
-      Array.Copy(Payload ?? new byte[0], 0, buffer, 5, Payload?.Length ?? 0);
-
-      return buffer.ToArray();
     }
 
     public int ParsePiece(int index, byte[] buffer)

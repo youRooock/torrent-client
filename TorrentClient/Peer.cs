@@ -69,12 +69,12 @@ namespace TorrentClient
     public void SendMessage(IMessage message) => SendInternal(message.Serialize());
 
 
-    // public IMessage ReadMessage()
-    // {
-    //   var bytes = ReadInternal();
-    //   
-    //   
-    // }
+    public IMessage ReadMessage()
+    {
+      var bytes = ReadInternal();
+      
+      
+    }
 
     public byte[] ReadData(int length)
     {
@@ -99,7 +99,7 @@ namespace TorrentClient
       Connection?.Dispose();
     }
 
-    private byte[] ReadInternal()
+    public byte[] ReadInternal()
     {
       try
       {
@@ -116,7 +116,7 @@ namespace TorrentClient
       }
     }
 
-    private void SendInternal(byte[] data)
+    public void SendInternal(byte[] data)
     {
       try
       {

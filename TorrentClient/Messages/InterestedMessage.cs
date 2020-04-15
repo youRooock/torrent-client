@@ -6,7 +6,8 @@ namespace TorrentClient.Messages
 {
   public class InterestedMessage: IMessage
   {
-    public const byte Id = (byte) MessageId.Interested;
+    public byte Id => (byte)MessageId.Interested;
+    public byte[] Payload { get; }
 
     public byte[] Serialize()
     {

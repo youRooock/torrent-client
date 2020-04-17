@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using TorrentClient.Events;
 using TorrentClient.Messages;
+using TorrentClient.Utils;
 
 namespace TorrentClient
 {
@@ -14,7 +16,6 @@ namespace TorrentClient
     private readonly ConcurrentQueue<RequestItem> _items;
     private readonly ChannelWriter<Piece> _channelWriter;
     private bool _choked = true;
-    private long _downloadedBytes;
     private Bitfield _bitfield;
 
     public Client(Peer peer, ConcurrentQueue<RequestItem> items, ChannelWriter<Piece> channelWriter)
@@ -27,7 +28,6 @@ namespace TorrentClient
       _messageHandler.OnBitfieldReceived += @event => { _bitfield = @event.Bitfield; };
       _messageHandler.OnChokeReceived += () => { _choked = true; };
       _messageHandler.OnUnchokeReceived += () => { _choked = false; };
-      _messageHandler.OnPieceReceived += 
     }
 
     private void HandlePiece(PieceEventArgs ev)
@@ -46,7 +46,6 @@ namespace TorrentClient
 
       while (!_items.IsEmpty)
       {
-        _downloadedBytes = 0;
         var piece = new Piece();
 
         if (!_items.TryDequeue(out var item)) continue;
@@ -55,6 +54,8 @@ namespace TorrentClient
           _items.Enqueue(item);
           continue;
         }
+
+        _messageHandler.OnPieceReceived += PieceCallback;
 
         while (piece.Downloaded < item.Length)
         {
@@ -70,11 +71,41 @@ namespace TorrentClient
             _bittorrent.SendMessage(new RequestMessage(new PieceBlock(item.Index, piece.Requested, piece.BlockSize)));
             piece.Requested += piece.BlockSize;
           }
-          
-          var n = ParsePiece(piece.Index, piece.Buffer);
+        }
 
-          piece.Downloaded += n;
+        _messageHandler.OnPieceReceived -= PieceCallback;
+
+        void PieceCallback(PieceEventArgs e)
+        {
+          var n = ParsePiece(item.Index, piece.Buffer, e.Payload);
+          piece.Downloaded =+ n;
         }
       }
     }
+    
+    static int ParsePiece(int index, byte[] buffer, byte[] payload)
+    {
+      if (payload.Length < 8)
+      {
+      }
+
+      var parsedIndex = BigEndian.ToUint32(payload[0..4]);
+      if (parsedIndex != index)
+      {
+      }
+
+      var begin = BigEndian.ToUint32(payload[4..8]);
+      if (begin >= buffer.Length)
+      {
+      }
+
+      var data = payload[8..];
+      if (begin + data.Length > buffer.Length)
+      {
+      }
+
+      Array.Copy(data, 0, buffer, begin, data.Length);
+      return data.Length;
+    }
+  }
   }

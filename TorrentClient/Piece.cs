@@ -10,7 +10,7 @@ namespace TorrentClient
     public byte[] Buffer { get; set; }
     public long Downloaded { get; set; }
     public long Requested { get; set; }
-    public long Backlog { get; set; }
+    public long BlockSize { get; set; } = 16384;
 
     public void CheckIntegrity(byte[] hash)
     {

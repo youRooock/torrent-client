@@ -1,6 +1,8 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using TorrentClient.Exceptions;
+using TorrentClient.Messages;
 
 namespace TorrentClient
 {
@@ -20,32 +22,50 @@ namespace TorrentClient
     public void EstablishConnection()
     {
       _peer.TryConnect();
-      PeerHandshake();
+     // PeerHandshake();
     }
 
+    public void SendMessage(IMessage message) => _peer.SendInternal(message.Serialize());
 
-    public Task ReadMessagesAsync(CancellationToken token)
+    public void ReadMessagesAsync(CancellationToken token)
     {
-      return Task.Factory.StartNew(() =>
+      Task.Factory.StartNew(() =>
       {
         while (true)
         {
           var messageBytes = _peer.ReadInternal();
           if (messageBytes == null) continue;
 
-          _messageHandler.Handle(messageBytes);
+          var message = ParseMessage(messageBytes);
+
+          _messageHandler.Handle(message);
         }
       }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    private void PeerHandshake(Handshake handshake)
+    private IResponseMessage ParseMessage(byte[] arr)
+    {
+      var message = arr[0] switch
+      {
+        (int)MessageId.Bitfield => new BitfieldMessage(arr),
+        (int)MessageId.Choke => new BitfieldMessage(arr),
+        (int)MessageId.Unchoke => new BitfieldMessage(arr),
+        (int)MessageId.Have => new BitfieldMessage(arr),
+        (int)MessageId.Piece => new BitfieldMessage(arr),
+        _ => throw new ArgumentException("Unknown message type")
+      };
+
+      return message;
+    }
+
+    public void PeerHandshake(Handshake handshake)
     {
       _peer.SendInternal(handshake.Bytes);
 
       var hs = _peer.ReadData(HANDSHAKE_SIZE);
-      var handshake2 = Handshake.Parse(hs);
+      var handshakeResp = Handshake.Parse(hs);
 
-      if (!handshake.Equals(handshake2))
+      if (!handshake.Equals(handshakeResp))
       {
         throw new PeerHandshakeException($"[{_peer.IPEndPoint}] failed to establish handshake");
       }

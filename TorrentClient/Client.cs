@@ -18,31 +18,31 @@ namespace TorrentClient
     private bool _choked = true;
     private Bitfield _bitfield;
 
-    public Client(Peer peer, ConcurrentQueue<RequestItem> items, ChannelWriter<Piece> channelWriter)
+    public Client(
+      Peer peer,
+      ConcurrentQueue<RequestItem> items,
+      ChannelWriter<Piece> channelWriter,
+      byte[] infoHash)
     {
       _items = items;
       _channelWriter = channelWriter;
       _messageHandler = new MessageHandler();
       _bittorrent = new BittorrentProtocol(peer, _messageHandler);
       _bittorrent.EstablishConnection();
+      _bittorrent.PeerHandshake(Handshake.Create(infoHash, PeerId.CreateNew()));
       _messageHandler.OnBitfieldReceived += @event => { _bitfield = @event.Bitfield; };
       _messageHandler.OnChokeReceived += () => { _choked = true; };
       _messageHandler.OnUnchokeReceived += () => { _choked = false; };
     }
 
-    private void HandlePiece(PieceEventArgs ev)
-    {
-      
-    }
-
-    public async Task Process()
+    public void Process()
     {
       var cts = new CancellationTokenSource();
 
       _bittorrent.SendMessage(new UnchokeMessage());
       _bittorrent.SendMessage(new InterestedMessage());
 
-      var readMessagesTask = _bittorrent.ReadMessagesAsync(cts.Token);
+      _bittorrent.ReadMessagesAsync(cts.Token);
 
       while (!_items.IsEmpty)
       {
@@ -82,7 +82,8 @@ namespace TorrentClient
         }
       }
     }
-    
+
+    // ToDo: handle cases
     static int ParsePiece(int index, byte[] buffer, byte[] payload)
     {
       if (payload.Length < 8)

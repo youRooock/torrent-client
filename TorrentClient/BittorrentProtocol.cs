@@ -27,24 +27,36 @@ namespace TorrentClient
 
     public void SendMessage(IMessage message) => _peer.SendInternal(message.Serialize());
 
+    public Message GetMessage() => _peer.ReadMessage();
+
     public void ReadMessagesAsync(CancellationToken token)
     {
       Task.Factory.StartNew(() =>
       {
         while (true)
         {
-          var messageBytes = _peer.ReadInternal();
-          if (messageBytes == null) continue;
+          try
+          {
+            var messageBytes = _peer.ReadInternal();
+            if (messageBytes == null) continue;
 
-          var message = ParseMessage(messageBytes);
+            var message = ParseMessage(messageBytes);
 
-          _messageHandler.Handle(message);
+            _messageHandler.Handle(message);
+          }
+
+          catch (Exception e)
+          {
+            
+          }
         }
       }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     private IResponseMessage ParseMessage(byte[] arr)
     {
+      
+      // handle all messages
       var message = arr[0] switch
       {
         (int)MessageId.Bitfield => new BitfieldMessage(arr),

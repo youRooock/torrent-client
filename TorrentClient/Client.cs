@@ -22,7 +22,8 @@ namespace TorrentClient
       Peer peer,
       ConcurrentQueue<RequestItem> items,
       ChannelWriter<Piece> channelWriter,
-      byte[] infoHash)
+      byte[] infoHash
+    )
     {
       _items = items;
       _channelWriter = channelWriter;
@@ -42,6 +43,8 @@ namespace TorrentClient
       _bittorrent.SendMessage(new UnchokeMessage());
       _bittorrent.SendMessage(new InterestedMessage());
 
+      // var message = _bittorrent.GetMessage();
+
       _bittorrent.ReadMessagesAsync(cts.Token);
 
       while (!_items.IsEmpty)
@@ -49,7 +52,7 @@ namespace TorrentClient
         var piece = new Piece();
 
         if (!_items.TryDequeue(out var item)) continue;
-        if (!_bitfield.HasPiece(item.Index))
+        if (_bitfield == null || !_bitfield.HasPiece(item.Index))
         {
           _items.Enqueue(item);
           continue;
@@ -78,7 +81,7 @@ namespace TorrentClient
         void PieceCallback(PieceEventArgs e)
         {
           var n = ParsePiece(item.Index, piece.Buffer, e.Payload);
-          piece.Downloaded =+ n;
+          piece.Downloaded = +n;
         }
       }
     }
@@ -109,4 +112,4 @@ namespace TorrentClient
       return data.Length;
     }
   }
-  }
+}

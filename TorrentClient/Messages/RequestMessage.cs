@@ -6,22 +6,24 @@ namespace TorrentClient.Messages
 {
   public class RequestMessage: IMessage
   {
-    private readonly BlockRequest _block;
-    private const byte Id = (byte) MessageId.Request;
+    private readonly PieceBlock _pieceBlock;
 
-    public RequestMessage(BlockRequest block)
+    public RequestMessage(PieceBlock pieceBlock)
     {
-      _block = block;
+      _pieceBlock = pieceBlock;
     }
+
+    public byte Id => (byte) MessageId.Request;
+    public byte[] Payload { get; }
 
     public byte[] Serialize()
     {
       using var ms = new MemoryStream();
       using var bw = new BinaryWriter(ms);
 
-      var index = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((int)_block.Index));
-      var offset = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((int)_block.Offset));
-      var length = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((int)_block.Length));
+      var index = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((int)_pieceBlock.Index));
+      var offset = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((int)_pieceBlock.Offset));
+      var length = BitConverter.GetBytes(IPAddress.HostToNetworkOrder((int)_pieceBlock.Length));
       var messageLength =
         BitConverter.GetBytes(IPAddress.HostToNetworkOrder(index.Length + offset.Length + length.Length + 1));
 

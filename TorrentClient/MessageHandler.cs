@@ -1,23 +1,42 @@
+using System;
+using TorrentClient.Events;
 using TorrentClient.Messages;
 
 namespace TorrentClient
 {
   public class MessageHandler
   {
-    public MessageHandler()
-    {
-      
-    }
+    public event Action<BitfieldEventArgs> OnBitfieldReceived;
+    public event Action<PieceEventArgs> OnPieceReceived;
+    public event Action OnUnchokeReceived;
+    public event Action OnChokeReceived;
+    public event Action OnHaveReceived;
 
-    public IMessage Handle(byte[] arr)
+
+    public void Handle(ResponseMessage message)
     {
-      var message = (MessageId) arr[0] switch
+      switch (message.Id)
       {
-        MessageId.Bitfield => new InterestedMessage(),
-        _ => null
-      };
-
-      return message;
+        case MessageId.Bitfield:
+          OnBitfieldReceived?.Invoke(
+            new BitfieldEventArgs {Bitfield = new Bitfield(message.Payload)}
+          );
+          break;
+        case MessageId.Piece:
+          OnPieceReceived?.Invoke(new PieceEventArgs
+            {Payload = message.Payload}
+          );
+          break;
+        case MessageId.Choke:
+          OnChokeReceived?.Invoke();
+          break;
+        case MessageId.Unchoke:
+          OnUnchokeReceived?.Invoke();
+          break;
+        case MessageId.Have:
+          OnHaveReceived?.Invoke();
+          break;
+      }
     }
   }
 }

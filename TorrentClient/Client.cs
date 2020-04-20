@@ -34,6 +34,7 @@ namespace TorrentClient
       _messageHandler.OnBitfieldReceived += @event => { _bitfield = @event.Bitfield; };
       _messageHandler.OnChokeReceived += () => { _choked = true; };
       _messageHandler.OnUnchokeReceived += () => { _choked = false; };
+      _messageHandler.OnHaveReceived += () => { Console.WriteLine("have"); };
     }
 
     public void Process()
@@ -42,27 +43,28 @@ namespace TorrentClient
 
       _bittorrent.SendMessage(new UnchokeMessage());
       _bittorrent.SendMessage(new InterestedMessage());
+      // _bittorrent.ReadMessagesAsync(cts.Token);
 
-      // var message = _bittorrent.GetMessage();
-
-      _bittorrent.ReadMessagesAsync(cts.Token);
+      _messageHandler.Handle(_bittorrent.ReadMessage());
+      _messageHandler.Handle(_bittorrent.ReadMessage());
 
       while (!_items.IsEmpty)
       {
-        var piece = new Piece();
-
         if (!_items.TryDequeue(out var item)) continue;
         if (_bitfield == null || !_bitfield.HasPiece(item.Index))
         {
           _items.Enqueue(item);
           continue;
         }
+        var piece = new Piece { Buffer = new byte[item.Length] };
 
         _messageHandler.OnPieceReceived += PieceCallback;
 
+        Console.WriteLine($"Downloading piece {item.Index}");
         while (piece.Downloaded < item.Length)
         {
           if (_choked) continue;
+          if (!_bittorrent.IsConnected) break;
 
           while (piece.Requested < item.Length)
           {
@@ -71,17 +73,22 @@ namespace TorrentClient
               piece.BlockSize = item.Length - piece.Requested;
             }
 
+            // hangs
             _bittorrent.SendMessage(new RequestMessage(new PieceBlock(item.Index, piece.Requested, piece.BlockSize)));
             piece.Requested += piece.BlockSize;
           }
+          _messageHandler.Handle(_bittorrent.ReadMessage());
         }
-
+        
         _messageHandler.OnPieceReceived -= PieceCallback;
+
+        if (piece.Downloaded == item.Length)  Console.WriteLine($"Downloaded piece {item.Index}");
 
         void PieceCallback(PieceEventArgs e)
         {
+          if (!_bittorrent.IsConnected) cts.Cancel();
           var n = ParsePiece(item.Index, piece.Buffer, e.Payload);
-          piece.Downloaded = +n;
+          piece.Downloaded += n;
         }
       }
     }

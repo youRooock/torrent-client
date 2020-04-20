@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using TorrentClient.Exceptions;
 using TorrentClient.Messages;
 
 namespace TorrentClient
@@ -22,7 +23,7 @@ namespace TorrentClient
 
     public static Peer Create(IPEndPoint ipEndPoint) => new Peer(ipEndPoint);
 
-    public bool TryConnect(byte[] infoHash)
+    public bool TryConnect()
     {
       try
       {
@@ -30,8 +31,8 @@ namespace TorrentClient
         {
           Connection = new Connection(IPEndPoint);
           IsConnected = true;
-          HandshakePeer(Handshake.Create(infoHash, PeerId.CreateNew()));
-          Bitfield = RetrieveBitfield();
+          // HandshakePeer(Handshake.Create(infoHash, PeerId.CreateNew()));
+          // Bitfield = RetrieveBitfield();
         }
 
         return true;
@@ -69,19 +70,19 @@ namespace TorrentClient
     public void SendMessage(IMessage message) => SendInternal(message.Serialize());
 
 
-    public IMessage ReadMessage()
-    {
-      var bytes = ReadInternal();
-      
-      
-    }
+    // public IMessage ReadMessage()
+    // {
+    //   var bytes = ReadInternal();
+    //   
+    //   
+    // }
 
     public byte[] ReadData(int length)
     {
       return Connection.Read(length);
     }
 
-    public Message ReadMessage()
+    public ResponseMessage ReadMessage()
     {
       int value = Connection.ReadSize();
       var length = IPAddress.NetworkToHostOrder(value);
@@ -89,7 +90,7 @@ namespace TorrentClient
 
       byte[] data = Connection.Read(length);
 
-      var msg = new Message(data);
+      var msg = new ResponseMessage(data);
 
       return msg;
     }
@@ -105,14 +106,15 @@ namespace TorrentClient
       {
         int byteSize = Connection.ReadSize();
         if (byteSize == 0) return null;
+        var length = IPAddress.NetworkToHostOrder(byteSize);
 
-        return Connection.Read(byteSize);
+        return Connection.Read(length);
       }
 
       catch (IOException)
       {
         IsConnected = false;
-        return null;
+       throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
       }
     }
 
@@ -126,7 +128,7 @@ namespace TorrentClient
         }
         else
         {
-          throw new Exception();
+          throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
         }
       }
       catch (IOException)

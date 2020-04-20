@@ -7,12 +7,14 @@ namespace TorrentClient.Messages
   public class HaveMessage: IMessage
   {
     private readonly long _index;
-    public const byte Id = (int) MessageId.Have;
+    public byte Id => (int) MessageId.Have;
 
     public HaveMessage(long index)
     {
       _index = index;
     }
+
+    public byte[] Payload { get; }
 
     public byte[] Serialize()
     {
@@ -28,7 +30,5 @@ namespace TorrentClient.Messages
 
       return ms.ToArray();
     }
-
-    public int Length => 1;
   }
 }

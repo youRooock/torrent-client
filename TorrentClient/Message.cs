@@ -41,7 +41,7 @@ namespace TorrentClient
     private int TotalMessageSize => (Payload?.Length ?? 0) + 1; // extra byte for id
   }
 
-  public enum MessageId
+  public enum MessageId: byte
   {
     Choke = 0,
     Unchoke,

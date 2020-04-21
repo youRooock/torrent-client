@@ -28,16 +28,14 @@ namespace TorrentClient
       var peers = endpoints.Select(Peer.Create);
 
       var queue = new ConcurrentQueue<RequestItem>();
-
-      // var items = torrentFileInfo.PieceHashes.Select((hash, index)
-      //   => new WorkItem(index, hash, CalculatePieceLength(torrentFileInfo, index))).ToList();
+      
       torrentFileInfo.PieceHashes.Select((hash, index)
         => new RequestItem(index, hash, CalculatePieceLength(torrentFileInfo, index))).ToList().ForEach(r => queue.Enqueue(r));
       
 
-     var torrentDownloader = new TorrentDownloader(peers, fileChannel.Writer, torrentFileInfo, queue);
+     var torrentDownloader = new TorrentDownloader(peers, torrentFileInfo, queue);
      
-     torrentDownloader.Download();
+     await torrentDownloader.Download();
 
       #region MyRegion
       

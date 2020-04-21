@@ -32,19 +32,15 @@ namespace TorrentClient
       _bittorrent.EstablishConnection();
       _bittorrent.PeerHandshake(Handshake.Create(infoHash, PeerId.CreateNew()));
       _messageHandler.OnBitfieldReceived += @event => { _bitfield = @event.Bitfield; };
+      _messageHandler.OnHaveReceived += @event => { _bitfield.SetPiece(@event.Index);};
       _messageHandler.OnChokeReceived += () => { _choked = true; };
       _messageHandler.OnUnchokeReceived += () => { _choked = false; };
-      _messageHandler.OnHaveReceived += () => { Console.WriteLine("have"); };
     }
 
-    public void Process()
+    public async Task Process()
     {
-      var cts = new CancellationTokenSource();
-
       _bittorrent.SendMessage(new UnchokeMessage());
       _bittorrent.SendMessage(new InterestedMessage());
-      // _bittorrent.ReadMessagesAsync(cts.Token);
-
       _messageHandler.Handle(_bittorrent.ReadMessage());
       _messageHandler.Handle(_bittorrent.ReadMessage());
 
@@ -56,11 +52,13 @@ namespace TorrentClient
           _items.Enqueue(item);
           continue;
         }
-        var piece = new Piece { Buffer = new byte[item.Length] };
+
+        var piece = new Piece {Index = item.Index, Buffer = new byte[item.Length]};
 
         _messageHandler.OnPieceReceived += PieceCallback;
 
         Console.WriteLine($"Downloading piece {item.Index}");
+
         while (piece.Downloaded < item.Length)
         {
           if (_choked) continue;
@@ -73,20 +71,24 @@ namespace TorrentClient
               piece.BlockSize = item.Length - piece.Requested;
             }
 
-            // hangs
             _bittorrent.SendMessage(new RequestMessage(new PieceBlock(item.Index, piece.Requested, piece.BlockSize)));
             piece.Requested += piece.BlockSize;
           }
+
           _messageHandler.Handle(_bittorrent.ReadMessage());
         }
-        
+
         _messageHandler.OnPieceReceived -= PieceCallback;
 
-        if (piece.Downloaded == item.Length)  Console.WriteLine($"Downloaded piece {item.Index}");
+        if (piece.Downloaded == item.Length)
+        {
+          Console.WriteLine($"Downloaded piece {item.Index}");
+          await _channelWriter.WriteAsync(piece);
+        }
 
         void PieceCallback(PieceEventArgs e)
         {
-          if (!_bittorrent.IsConnected) cts.Cancel();
+          if (!_bittorrent.IsConnected) return;
           var n = ParsePiece(item.Index, piece.Buffer, e.Payload);
           piece.Downloaded += n;
         }
@@ -100,7 +102,7 @@ namespace TorrentClient
       {
       }
 
-      var parsedIndex = BigEndian.ToUint32(payload[0..4]);
+      var parsedIndex = BigEndian.ToUint32(payload[..4]);
       if (parsedIndex != index)
       {
       }

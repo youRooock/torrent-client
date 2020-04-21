@@ -1,6 +1,8 @@
 using System;
+using System.Net;
 using TorrentClient.Events;
 using TorrentClient.Messages;
+using TorrentClient.Utils;
 
 namespace TorrentClient
 {
@@ -10,7 +12,7 @@ namespace TorrentClient
     public event Action<PieceEventArgs> OnPieceReceived;
     public event Action OnUnchokeReceived;
     public event Action OnChokeReceived;
-    public event Action OnHaveReceived;
+    public event Action<HaveEventArgs> OnHaveReceived;
 
 
     public void Handle(ResponseMessage message)
@@ -34,7 +36,7 @@ namespace TorrentClient
           OnUnchokeReceived?.Invoke();
           break;
         case MessageId.Have:
-          OnHaveReceived?.Invoke();
+          OnHaveReceived?.Invoke(new HaveEventArgs { Index = BigEndian.ToUint32(message.Payload) });
           break;
       }
     }

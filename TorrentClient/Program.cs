@@ -14,6 +14,14 @@ namespace TorrentClient
 {
   class Program
   {
+    /// <summary>
+    /// ToDo:
+    /// 1. Limit concurrency (clients)
+    /// 2. Signal when all pieces are done, so to close consumer
+    /// 3. Cancel newly created client when all pieces are done
+    /// 4. Not create new client when pieces are done
+    /// </summary>
+
     static Channel<Piece> fileChannel = Channel.CreateUnbounded<Piece>();
 
     static async Task Main(string[] args)

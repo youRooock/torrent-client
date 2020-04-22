@@ -38,7 +38,7 @@ namespace TorrentClient
 
     public void Dispose()
     {
-      _tcpClient.Close();
+      _tcpClient.Dispose();
     }
   }
 }

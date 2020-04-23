@@ -1,9 +1,7 @@
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -43,7 +41,7 @@ namespace TorrentClient
 
       await Task.WhenAll(tasks);
     }
-    
+
     async Task ConsumeAsync()
     {
       await using var fs = new FileStream(@"D:\my-file1.iso", FileMode.Create, FileAccess.Write);

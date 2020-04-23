@@ -12,16 +12,11 @@ namespace TorrentClient
     public long Requested { get; set; }
     public long BlockSize { get; set; } = 16384;
 
-    public void CheckIntegrity(byte[] hash)
+    public bool CheckIntegrity(byte[] hash)
     {
       SHA1 sha = new SHA1CryptoServiceProvider();
       var computedHash = sha.ComputeHash(Buffer);
-      var eq = hash.SequenceEqual(computedHash);
-
-      if (!eq)
-      {
-        throw new Exception("failed check sum");
-      }
+      return hash.SequenceEqual(computedHash);
     }
   }
 }

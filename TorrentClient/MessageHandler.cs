@@ -1,5 +1,4 @@
 using System;
-using System.Net;
 using TorrentClient.Events;
 using TorrentClient.Messages;
 using TorrentClient.Utils;

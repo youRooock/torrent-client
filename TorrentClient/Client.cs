@@ -79,6 +79,13 @@ namespace TorrentClient
 
         _messageHandler.OnPieceReceived -= PieceCallback;
 
+        if (!piece.CheckIntegrity(item.Hash))
+        {
+          Console.WriteLine("Failed integrity check");
+          _items.Enqueue(item);
+          continue;
+        }
+
         if (piece.Downloaded == item.Length)
         {
           Console.WriteLine($"Downloaded piece {item.Index}");

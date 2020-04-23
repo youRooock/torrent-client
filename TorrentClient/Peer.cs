@@ -10,11 +10,8 @@ namespace TorrentClient
   {
     private Connection Connection { get; set; }
     private bool IsConnected { get; set; }
-    public Bitfield Bitfield { get; private set; }
-
     // ReSharper disable once InconsistentNaming
     public IPEndPoint IPEndPoint { get; }
-    public bool IsChoked { get; set; } = true;
 
     private Peer(IPEndPoint ipEndPoint)
     {
@@ -23,7 +20,7 @@ namespace TorrentClient
 
     public static Peer Create(IPEndPoint ipEndPoint) => new Peer(ipEndPoint);
 
-    public bool TryConnect()
+    public void Connect()
     {
       try
       {
@@ -31,68 +28,30 @@ namespace TorrentClient
         {
           Connection = new Connection(IPEndPoint);
           IsConnected = true;
-          // HandshakePeer(Handshake.Create(infoHash, PeerId.CreateNew()));
-          // Bitfield = RetrieveBitfield();
         }
-
-        return true;
       }
 
       catch (Exception)
       {
         IsConnected = false;
-        return false;
       }
     }
-
-    private Bitfield RetrieveBitfield()
-    {
-      var mgs = ReadMessage();
-
-      return new Bitfield(mgs.Payload);
-    }
-
-    private void HandshakePeer(Handshake handshake)
-    {
-      SendInternal(handshake.Bytes);
-
-      var hs = ReadData(68);
-      var handshake2 = Handshake.Parse(hs);
-
-      if (!handshake.Equals(handshake2))
-      {
-        Console.WriteLine($"[{IPEndPoint}] Handshake failed");
-
-        throw new Exception($"[{IPEndPoint}] Handshake failed");
-      }
-    }
-
-    public void SendMessage(IMessage message) => SendInternal(message.Serialize());
-
-
-    // public IMessage ReadMessage()
-    // {
-    //   var bytes = ReadInternal();
-    //   
-    //   
-    // }
 
     public byte[] ReadData(int length)
     {
-      return Connection.Read(length);
+      return Connection.Reader.ReadBytes(length);
     }
 
-    public ResponseMessage ReadMessage()
+    public byte[] ReadBytes()
     {
-      int value = Connection.ReadSize();
-      var length = IPAddress.NetworkToHostOrder(value);
+      int byteSize = Connection.Reader.ReadInt32();
+      if (byteSize == 0) return null;
+      var length = IPAddress.NetworkToHostOrder(byteSize);
       if (length == 0) return null;
 
-      byte[] data = Connection.Read(length);
+      byte[] data = Connection.Reader.ReadBytes(length);
 
-      var msg = new ResponseMessage(data);
-
-      return msg;
+      return data;
     }
 
     public void Dispose()
@@ -100,31 +59,14 @@ namespace TorrentClient
       Connection?.Dispose();
     }
 
-    public byte[] ReadInternal()
-    {
-      try
-      {
-        int byteSize = Connection.ReadSize();
-        if (byteSize == 0) return null;
-        var length = IPAddress.NetworkToHostOrder(byteSize);
-
-        return Connection.Read(length);
-      }
-
-      catch (IOException)
-      {
-        IsConnected = false;
-       throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
-      }
-    }
-
-    public void SendInternal(byte[] data)
+    public void SendBytes(byte[] data)
     {
       try
       {
         if (IsConnected)
         {
-          Connection.Write(data);
+          Connection.Writer.Write(data);
+          Connection.Writer.Flush();
         }
         else
         {

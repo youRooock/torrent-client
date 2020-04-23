@@ -22,40 +22,22 @@ namespace TorrentClient
 
     public void EstablishConnection()
     {
-      _peer.TryConnect();
+      _peer.Connect();
       IsConnected = true;
     }
 
-    public void SendMessage(IMessage message) => _peer.SendInternal(message.Serialize());
+    public void SendMessage(IMessage message) => _peer.SendBytes(message.Serialize());
 
-    public ResponseMessage ReadMessage() => _peer.ReadMessage();
-
-    public void ReadMessagesAsync(CancellationToken token)
+    public ResponseMessage ReadMessage()
     {
-      Task.Factory.StartNew(() =>
-      {
-        while (true)
-        {
-          try
-          {
-            var messageBytes = _peer.ReadInternal();
-            if (messageBytes == null) continue;
+      var bytes = _peer.ReadBytes();
 
-            _messageHandler.Handle(new ResponseMessage(messageBytes));
-          }
-
-          catch (Exception e)
-          {
-            Console.WriteLine(e.Message);
-            IsConnected = false;
-          }
-        }
-      }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+      return new ResponseMessage(bytes);
     }
 
     public void PeerHandshake(Handshake handshake)
     {
-      _peer.SendInternal(handshake.Bytes);
+      _peer.SendBytes(handshake.Bytes);
 
       var hs = _peer.ReadData(HANDSHAKE_SIZE);
       var handshakeResp = Handshake.Parse(hs);

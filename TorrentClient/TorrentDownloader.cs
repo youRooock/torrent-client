@@ -44,7 +44,7 @@ namespace TorrentClient
 
     async Task ConsumeAsync()
     {
-      await using var fs = new FileStream(@"D:\my-file1.iso", FileMode.Create, FileAccess.Write);
+      await using var fs = new FileStream($"D:\\{_info.Name}", FileMode.Create, FileAccess.Write);
       while (await _reader.WaitToReadAsync())
       {
         if (_reader.TryRead(out var piece))

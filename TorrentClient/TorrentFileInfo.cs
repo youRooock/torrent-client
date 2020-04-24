@@ -22,6 +22,7 @@ namespace TorrentClient
     public long PieceSize => _torrent.PieceSize;
     public byte[] Pieces => _torrent.Pieces;
     public byte[][] PieceHashes { get; }
+    public string Name => _torrent.DisplayName;
 
     private byte[][] SplitPieceHashes()
     {

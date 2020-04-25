@@ -7,8 +7,13 @@ namespace TorrentClient.Messages
 
     public ResponseMessage(byte[] arr)
     {
-      Id = (MessageId) arr[0];
-      Payload = arr[1..];
+      if (arr == null)
+        Id = MessageId.KeepAlive;
+      else
+      {
+        Id = (MessageId) arr[0];
+        Payload = arr[1..];
+      }
     }
   }
 }

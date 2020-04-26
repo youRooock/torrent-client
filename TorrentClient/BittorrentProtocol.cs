@@ -12,7 +12,7 @@ namespace TorrentClient
     private const int HANDSHAKE_SIZE = 68;
     private readonly Peer _peer;
     private readonly MessageHandler _messageHandler;
-    public bool IsConnected { get; private set; }
+    public bool IsConnected => _peer.IsConnected;
 
     public BittorrentProtocol(Peer peer, MessageHandler messageHandler)
     {
@@ -23,7 +23,6 @@ namespace TorrentClient
     public void EstablishConnection()
     {
       _peer.Connect();
-      IsConnected = true;
     }
 
     public void SendMessage(IMessage message) => _peer.SendBytes(message.Serialize());
@@ -47,5 +46,7 @@ namespace TorrentClient
         throw new PeerHandshakeException($"[{_peer.IPEndPoint}] failed to establish handshake");
       }
     }
+
+    public void Disconnect() => _peer.Disconnect();
   }
 }

@@ -1,9 +1,10 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using TorrentClient.Extensions;
 
 namespace TorrentClient
 {
@@ -12,7 +13,6 @@ namespace TorrentClient
     private readonly IEnumerable<Peer> _peers;
     private readonly ChannelWriter<Piece> _writer;
     private readonly ChannelReader<Piece> _reader;
-
     private readonly TorrentFileInfo _info;
     private readonly ConcurrentQueue<RequestItem> _items;
 
@@ -30,21 +30,32 @@ namespace TorrentClient
     public async Task Download()
     {
       var consumerTask = ConsumeAsync();
-      var tasks = _peers.Select(peer => Task.Run(() =>
-      {
-        var cl = new Client(peer, _items, _writer, _info.InfoHash);
 
-        return cl.Process();
-      })).ToList();
+      await _peers.ForEachAsync(15, DownloadInternal);
 
-      tasks.Add(consumerTask);
+      _writer.Complete();
 
-      await Task.WhenAll(tasks);
+     await consumerTask;
     }
 
-    async Task ConsumeAsync()
+    private Task DownloadInternal(Peer peer)
     {
-      await using var fs = new FileStream($"D:\\{_info.Name}", FileMode.Create, FileAccess.Write);
+      if (!_items.IsEmpty)
+      {
+        var c = new Client(peer, _items, _writer, _info.InfoHash);
+
+        return c.Process();
+      }
+
+      return Task.CompletedTask;
+    }
+
+
+    private async Task ConsumeAsync()
+    {
+      var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+
+      await using var fs = new FileStream(Path.Combine(directory, _info.Name), FileMode.Create, FileAccess.Write);
       while (await _reader.WaitToReadAsync())
       {
         if (_reader.TryRead(out var piece))

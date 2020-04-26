@@ -1,4 +1,6 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -17,7 +19,7 @@ namespace TorrentClient
 
     static async Task Main(string[] args)
     {
-      var torrentFileInfo = new TorrentFileInfo(@"D:\ubuntu.torrent");
+      var torrentFileInfo = new TorrentFileInfo(@"D:\2.torrent");
       var tracker = new TorrentTracker(torrentFileInfo.Announce);
       var endpoints =
         await tracker.RetrievePeersAsync(torrentFileInfo.InfoHash, PeerId.CreateNew(), torrentFileInfo.Size);
@@ -33,6 +35,8 @@ namespace TorrentClient
 
       var torrentDownloader = new TorrentDownloader(peers, torrentFileInfo, queue);
       await torrentDownloader.Download();
+
+      Console.WriteLine("Downloaded!");
     }
 
     static long CalculatePieceLength(TorrentFileInfo info, int index)

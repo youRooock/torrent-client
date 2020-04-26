@@ -2,14 +2,13 @@
 using System.IO;
 using System.Net;
 using TorrentClient.Exceptions;
-using TorrentClient.Messages;
 
 namespace TorrentClient
 {
   public class Peer : IDisposable
   {
     private Connection Connection { get; set; }
-    private bool IsConnected { get; set; }
+    public bool IsConnected { get; private set; }
     // ReSharper disable once InconsistentNaming
     public IPEndPoint IPEndPoint { get; }
 
@@ -39,7 +38,7 @@ namespace TorrentClient
 
     public byte[] ReadData(int length)
     {
-      return Connection.Reader.ReadBytes(length);
+      return ReadBytesInternal(length);
     }
 
     public byte[] ReadBytes()
@@ -49,10 +48,10 @@ namespace TorrentClient
       var length = IPAddress.NetworkToHostOrder(byteSize);
       if (length == 0) return null;
 
-      byte[] data = Connection.Reader.ReadBytes(length);
-
-      return data;
+      return ReadBytesInternal(length);
     }
+
+    public void Disconnect() => IsConnected = false;
 
     public void Dispose()
     {
@@ -76,6 +75,23 @@ namespace TorrentClient
       catch (IOException)
       {
         IsConnected = false;
+      }
+    }
+
+    private byte[] ReadBytesInternal(int length)
+    {
+      try
+      {
+        if (IsConnected)
+        {
+          return Connection.Reader.ReadBytes(length);
+        }
+        throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
+      }
+      catch (IOException)
+      {
+        IsConnected = false;
+        throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
       }
     }
   }

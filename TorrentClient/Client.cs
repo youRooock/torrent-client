@@ -32,15 +32,14 @@ namespace TorrentClient
       _bittorrent.PeerHandshake(Handshake.Create(infoHash, PeerId.CreateNew()));
       _messageHandler.OnBitfieldReceived += @event => { _bitfield = @event.Bitfield; };
       _messageHandler.OnHaveReceived += @event => { _bitfield.SetPiece(@event.Index);};
-      _messageHandler.OnChokeReceived += () => { _choked = true; };
+      _messageHandler.OnChokeReceived += () => { _bittorrent.Disconnect(); };
       _messageHandler.OnUnchokeReceived += () => { _choked = false; };
     }
 
     public async Task Process()
     {
-      _bittorrent.SendMessage(new UnchokeMessage());
-      _bittorrent.SendMessage(new InterestedMessage());
-      _messageHandler.Handle(_bittorrent.ReadMessage());
+      int chokeCount = 0;
+
       _messageHandler.Handle(_bittorrent.ReadMessage());
 
       while (!_items.IsEmpty)
@@ -60,8 +59,20 @@ namespace TorrentClient
 
         while (piece.Downloaded < item.Length)
         {
-          if (_choked) continue;
-          if (!_bittorrent.IsConnected) break;
+          if (!_bittorrent.IsConnected) return;
+          if (_choked)
+          {
+            _bittorrent.SendMessage(new UnchokeMessage());
+            _bittorrent.SendMessage(new InterestedMessage());
+
+            _messageHandler.Handle(_bittorrent.ReadMessage());
+
+            chokeCount++;
+            
+            if(chokeCount == 5) _bittorrent.Disconnect();
+
+            continue;
+          }
 
           while (piece.Requested < item.Length)
           {

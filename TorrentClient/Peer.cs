@@ -72,7 +72,7 @@ namespace TorrentClient
           throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
         }
       }
-      catch (IOException)
+      catch (Exception)
       {
         IsConnected = false;
       }
@@ -88,7 +88,7 @@ namespace TorrentClient
         }
         throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
       }
-      catch (IOException)
+      catch (Exception)
       {
         IsConnected = false;
         throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");

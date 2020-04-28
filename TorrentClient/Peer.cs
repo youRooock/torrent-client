@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Net;
 using TorrentClient.Exceptions;
 
@@ -8,7 +7,7 @@ namespace TorrentClient
   public class Peer : IDisposable
   {
     private Connection Connection { get; set; }
-    public bool IsConnected { get; private set; }
+
     // ReSharper disable once InconsistentNaming
     public IPEndPoint IPEndPoint { get; }
 
@@ -23,16 +22,12 @@ namespace TorrentClient
     {
       try
       {
-        if (!IsConnected)
-        {
-          Connection = new Connection(IPEndPoint);
-          IsConnected = true;
-        }
+        Connection = new Connection(IPEndPoint);
       }
 
       catch (Exception)
       {
-        IsConnected = false;
+        throw new PeerCommunicationException($"[{IPEndPoint}] Failed to connect peer");
       }
     }
 
@@ -43,15 +38,22 @@ namespace TorrentClient
 
     public byte[] ReadBytes()
     {
-      int byteSize = Connection.Reader.ReadInt32();
-      if (byteSize == 0) return null;
-      var length = IPAddress.NetworkToHostOrder(byteSize);
+      int length;
+      try
+      {
+        int byteSize = Connection.Reader.ReadInt32();
+        if (byteSize == 0) return null;
+        length = IPAddress.NetworkToHostOrder(byteSize);
+      }
+      catch (Exception)
+      {
+        throw new PeerCommunicationException($"[{IPEndPoint}] Failed to send bytes to peer");
+      }
+
       if (length == 0) return null;
 
       return ReadBytesInternal(length);
     }
-
-    public void Disconnect() => IsConnected = false;
 
     public void Dispose()
     {
@@ -62,19 +64,12 @@ namespace TorrentClient
     {
       try
       {
-        if (IsConnected)
-        {
-          Connection.Writer.Write(data);
-          Connection.Writer.Flush();
-        }
-        else
-        {
-          throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
-        }
+        Connection.Writer.Write(data);
+        Connection.Writer.Flush();
       }
       catch (Exception)
       {
-        IsConnected = false;
+        throw new PeerCommunicationException($"[{IPEndPoint}] Failed to send bytes to peer");
       }
     }
 
@@ -82,16 +77,11 @@ namespace TorrentClient
     {
       try
       {
-        if (IsConnected)
-        {
-          return Connection.Reader.ReadBytes(length);
-        }
-        throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
+        return Connection.Reader.ReadBytes(length);
       }
       catch (Exception)
       {
-        IsConnected = false;
-        throw new PeerCommunicationException($"[{IPEndPoint}] disconnected from peer");
+        throw new PeerCommunicationException($"[{IPEndPoint}] Failed to read bytes from peer");
       }
     }
   }

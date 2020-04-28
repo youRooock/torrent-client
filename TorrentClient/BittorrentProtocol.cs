@@ -11,13 +11,10 @@ namespace TorrentClient
     // ReSharper disable once InconsistentNaming
     private const int HANDSHAKE_SIZE = 68;
     private readonly Peer _peer;
-    private readonly MessageHandler _messageHandler;
-    public bool IsConnected => _peer.IsConnected;
 
-    public BittorrentProtocol(Peer peer, MessageHandler messageHandler)
+    public BittorrentProtocol(Peer peer)
     {
       _peer = peer;
-      _messageHandler = messageHandler;
     }
 
     public void EstablishConnection()
@@ -46,7 +43,5 @@ namespace TorrentClient
         throw new PeerHandshakeException($"[{_peer.IPEndPoint}] failed to establish handshake");
       }
     }
-
-    public void Disconnect() => _peer.Disconnect();
   }
 }

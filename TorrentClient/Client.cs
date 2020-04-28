@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using TorrentClient.Events;
+using TorrentClient.Exceptions;
 using TorrentClient.Messages;
 using TorrentClient.Utils;
 
@@ -10,10 +11,14 @@ namespace TorrentClient
 {
   public class Client
   {
+    private const int MAX_CHOKED_COUNT = 10;
+    private const int MAX_EMPTY_BITFIELD_COUNT = 10;
     private readonly BittorrentProtocol _bittorrent;
     private readonly MessageHandler _messageHandler;
     private readonly ConcurrentQueue<RequestItem> _items;
     private readonly ChannelWriter<Piece> _channelWriter;
+    private int _currentChokedCount;
+    private int _currentEmptyBitfieldCount;
     private bool _choked = true;
     private Bitfield _bitfield;
 
@@ -27,88 +32,102 @@ namespace TorrentClient
       _items = items;
       _channelWriter = channelWriter;
       _messageHandler = new MessageHandler();
-      _bittorrent = new BittorrentProtocol(peer, _messageHandler);
+      _bittorrent = new BittorrentProtocol(peer);
       _bittorrent.EstablishConnection();
       _bittorrent.PeerHandshake(Handshake.Create(infoHash, PeerId.CreateNew()));
       _messageHandler.OnBitfieldReceived += @event => { _bitfield = @event.Bitfield; };
-      _messageHandler.OnHaveReceived += @event => { _bitfield.SetPiece(@event.Index);};
-      _messageHandler.OnChokeReceived += () => { _bittorrent.Disconnect(); };
+      _messageHandler.OnHaveReceived += @event => { _bitfield.SetPiece(@event.Index); };
+      _messageHandler.OnChokeReceived += () => { _choked = true; };
       _messageHandler.OnUnchokeReceived += () => { _choked = false; };
     }
 
     public async Task Process()
     {
-      int chokeCount = 0;
-
-      _messageHandler.Handle(_bittorrent.ReadMessage());
-
-      while (!_items.IsEmpty)
+      RequestItem item = null;
+      try
       {
-        if (!_items.TryDequeue(out var item)) continue;
-        if (_bitfield == null || !_bitfield.HasPiece(item.Index))
+        _messageHandler.Handle(_bittorrent.ReadMessage());
+
+        while (!_items.IsEmpty)
         {
-          _items.Enqueue(item);
-          continue;
-        }
-
-        var piece = new Piece {Index = item.Index, Buffer = new byte[item.Length]};
-
-        _messageHandler.OnPieceReceived += PieceCallback;
-
-        Console.WriteLine($"Downloading piece {item.Index}");
-
-        while (piece.Downloaded < item.Length)
-        {
-          if (!_bittorrent.IsConnected) return;
-          if (_choked)
+          if (!_items.TryDequeue(out item)) continue;
+          if (_bitfield == null || !_bitfield.HasPiece(item.Index))
           {
-            _bittorrent.SendMessage(new UnchokeMessage());
-            _bittorrent.SendMessage(new InterestedMessage());
+            _items.Enqueue(item);
+            _currentEmptyBitfieldCount++;
 
-            _messageHandler.Handle(_bittorrent.ReadMessage());
-
-            chokeCount++;
-            
-            if(chokeCount == 5) _bittorrent.Disconnect();
+            if (_currentEmptyBitfieldCount == MAX_EMPTY_BITFIELD_COUNT) return;
 
             continue;
           }
 
-          while (piece.Requested < item.Length)
+          var piece = new Piece {Index = item.Index, Buffer = new byte[item.Length]};
+
+          _messageHandler.OnPieceReceived += PieceCallback;
+
+          Console.WriteLine($"Downloading piece {item.Index}");
+
+          while (piece.Downloaded < item.Length)
           {
-            if (item.Length - piece.Requested < piece.BlockSize)
+            if (_choked)
             {
-              piece.BlockSize = item.Length - piece.Requested;
+              _bittorrent.SendMessage(new UnchokeMessage());
+              _bittorrent.SendMessage(new InterestedMessage());
+
+              _messageHandler.Handle(_bittorrent.ReadMessage());
+
+              _currentChokedCount++;
+
+              if (_currentChokedCount == MAX_CHOKED_COUNT)
+              {
+                _items.Enqueue(item);
+                return;
+              }
+
+              continue;
             }
 
-            _bittorrent.SendMessage(new RequestMessage(new PieceBlock(item.Index, piece.Requested, piece.BlockSize)));
-            piece.Requested += piece.BlockSize;
+            while (piece.Requested < item.Length)
+            {
+              if (item.Length - piece.Requested < piece.BlockSize)
+              {
+                piece.BlockSize = item.Length - piece.Requested;
+              }
+
+              _bittorrent.SendMessage(new RequestMessage(new PieceBlock(item.Index, piece.Requested, piece.BlockSize)));
+              piece.Requested += piece.BlockSize;
+            }
+
+            _messageHandler.Handle(_bittorrent.ReadMessage());
           }
 
-          _messageHandler.Handle(_bittorrent.ReadMessage());
-        }
+          _messageHandler.OnPieceReceived -= PieceCallback;
 
-        _messageHandler.OnPieceReceived -= PieceCallback;
+          if (!piece.CheckIntegrity(item.Hash))
+          {
+            Console.WriteLine("Failed integrity check");
+            _items.Enqueue(item);
+            continue;
+          }
 
-        if (!piece.CheckIntegrity(item.Hash))
-        {
-          Console.WriteLine("Failed integrity check");
-          _items.Enqueue(item);
-          continue;
-        }
+          if (piece.Downloaded == item.Length)
+          {
+            Console.WriteLine($"Downloaded piece {item.Index}");
+            await _channelWriter.WriteAsync(piece);
+          }
 
-        if (piece.Downloaded == item.Length)
-        {
-          Console.WriteLine($"Downloaded piece {item.Index}");
-          await _channelWriter.WriteAsync(piece);
+          void PieceCallback(PieceEventArgs e)
+          {
+            // ReSharper disable once AccessToModifiedClosure
+            var n = ParsePiece(item.Index, piece.Buffer, e.Payload);
+            piece.Downloaded += n;
+          }
         }
-
-        void PieceCallback(PieceEventArgs e)
-        {
-          if (!_bittorrent.IsConnected) return;
-          var n = ParsePiece(item.Index, piece.Buffer, e.Payload);
-          piece.Downloaded += n;
-        }
+      }
+      catch (PeerCommunicationException e)
+      {
+        if (item != null) _items.Enqueue(item);
+        Console.WriteLine(e.Message);
       }
     }
 

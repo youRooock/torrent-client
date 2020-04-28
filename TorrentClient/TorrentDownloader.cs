@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using TorrentClient.Exceptions;
 using TorrentClient.Extensions;
 
 namespace TorrentClient
@@ -31,7 +32,7 @@ namespace TorrentClient
     {
       var consumerTask = ConsumeAsync();
 
-      await _peers.ForEachAsync(15, DownloadInternal);
+      await _peers.ForEachAsync(20, DownloadInternal);
 
       _writer.Complete();
 
@@ -42,9 +43,21 @@ namespace TorrentClient
     {
       if (!_items.IsEmpty)
       {
-        var c = new Client(peer, _items, _writer, _info.InfoHash);
+        try
+        {
+          var c = new Client(peer, _items, _writer, _info.InfoHash);
 
-        return c.Process();
+          return c.Process();
+        }
+
+        catch (PeerHandshakeException e)
+        {
+          Console.WriteLine(e.Message);
+        }
+        catch (PeerCommunicationException e)
+        {
+          Console.WriteLine(e.Message);
+        }
       }
 
       return Task.CompletedTask;

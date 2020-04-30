@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using BencodeNET.Parsing;
 using BencodeNET.Torrents;
 
@@ -10,7 +11,10 @@ namespace TorrentClient
 
     public TorrentFileInfo(string path)
     {
-      // ToDo: provide some validations for path
+      if (!File.Exists(path))
+        throw new ArgumentException($"{path} doesn't exist");
+      if (Path.GetExtension(path) != ".torrent")
+        throw new ArgumentException("provided file should have .torrent extension");
       BencodeParser parser = new BencodeParser();
       _torrent = parser.Parse<Torrent>(path);
       PieceHashes = SplitPieceHashes();
@@ -20,23 +24,21 @@ namespace TorrentClient
     public string Announce => _torrent.Trackers[0][0];
     public byte[] InfoHash => _torrent.GetInfoHashBytes();
     public long PieceSize => _torrent.PieceSize;
-    public byte[] Pieces => _torrent.Pieces;
     public byte[][] PieceHashes { get; }
     public string Name => _torrent.DisplayName;
 
     private byte[][] SplitPieceHashes()
     {
       var hashLength = 20;
-      var piecesSpan = Pieces.AsSpan();
-      var hashNums = Pieces.Length / hashLength;
-      byte[][] pieceHases = new byte[hashNums][]; 
+      var hashNums =  _torrent.Pieces.Length / hashLength;
+      byte[][] pieceHashes = new byte[hashNums][];
 
       for (int i = 0, offset = 0; i < hashNums; i++, offset += hashLength)
       {
-        pieceHases[i] = piecesSpan.Slice(offset, hashLength).ToArray();
+        pieceHashes[i] = _torrent.Pieces[offset..(offset + hashLength)];
       }
 
-      return pieceHases;
+      return pieceHashes;
     }
   }
 }

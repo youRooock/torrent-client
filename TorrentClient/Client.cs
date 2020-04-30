@@ -118,12 +118,7 @@ namespace TorrentClient
 
           void PieceCallback(PieceEventArgs e)
           {
-            // ReSharper disable once AccessToModifiedClosure
-            if (TryParsePiece(item.Index, piece.Buffer, e.Payload, out var downloaded))
-            {
-              piece.Downloaded += downloaded;
-            }
-            else _items.Enqueue(item);
+            piece.Download(e.Payload);
           }
         }
       }
@@ -132,38 +127,6 @@ namespace TorrentClient
         if (item != null) _items.Enqueue(item);
         Console.WriteLine(e.Message);
       }
-    }
-
-    // ToDo: handle cases
-    static bool TryParsePiece(int index, byte[] buffer, byte[] payload, out int downloaded)
-    {
-      downloaded = 0;
-      if (payload.Length < 8)
-      {
-        return false;
-      }
-
-      var parsedIndex = BigEndian.ToUint32(payload[..4]);
-      if (parsedIndex != index)
-      {
-        return false;
-      }
-
-      var begin = BigEndian.ToUint32(payload[4..8]);
-      if (begin >= buffer.Length)
-      {
-        return false;
-      }
-
-      var data = payload[8..];
-      if (begin + data.Length > buffer.Length)
-      {
-        return false;
-      }
-
-      Array.Copy(data, 0, buffer, begin, data.Length);
-      downloaded = data.Length;
-      return true;
     }
   }
 }

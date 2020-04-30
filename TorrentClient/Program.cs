@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -8,18 +7,9 @@ namespace TorrentClient
 {
   class Program
   {
-    /// <summary>
-    /// ToDo:
-    /// 1. Limit concurrency (clients)
-    /// 2. Signal when all pieces are done, so to close consumer
-    /// 3. Cancel newly created client when all pieces are done
-    /// 4. Not create new client when pieces are done
-    /// 5. Check integrity of piece
-    /// </summary>
-
     static async Task Main(string[] args)
     {
-      var torrentFileInfo = new TorrentFileInfo(@"D:\2.torrent");
+      var torrentFileInfo = new TorrentFileInfo(@"D:\debian.torrent");
       var tracker = new TorrentTracker(torrentFileInfo.Announce);
       var endpoints =
         await tracker.RetrievePeersAsync(torrentFileInfo.InfoHash, PeerId.CreateNew(), torrentFileInfo.Size);
@@ -29,7 +19,7 @@ namespace TorrentClient
       var queue = new ConcurrentQueue<RequestItem>();
 
       torrentFileInfo.PieceHashes.Select((hash, index)
-          => new RequestItem(index, hash, CalculatePieceLength(torrentFileInfo, index))).ToList()
+          => new RequestItem(index, hash, torrentFileInfo.PieceSize, torrentFileInfo.Size)).ToList()
         .ForEach(r => queue.Enqueue(r));
 
 
@@ -37,19 +27,6 @@ namespace TorrentClient
       await torrentDownloader.Download();
 
       Console.WriteLine("Downloaded!");
-    }
-
-    static long CalculatePieceLength(TorrentFileInfo info, int index)
-    {
-      var begin = index * info.PieceSize;
-      var end = begin + info.PieceSize;
-
-      if (end > info.Size)
-      {
-        end = info.Size;
-      }
-
-      return end - begin;
     }
   }
 }

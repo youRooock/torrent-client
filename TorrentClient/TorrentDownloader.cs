@@ -32,7 +32,7 @@ namespace TorrentClient
     {
       var consumerTask = ConsumeAsync();
 
-      await _peers.ForEachAsync(20, DownloadInternal);
+      await _peers.ForEachAsync(10, DownloadInternal);
 
       _writer.Complete();
 
